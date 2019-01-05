@@ -19,7 +19,10 @@ class Policy(ABC):
 
 class AlwaysCheckCall(Policy):
     def aggressive_action_prob(self, infoset: KuhnPoker.KuhnPokerGame.KuhnInfoset) -> float:
-        return 0
+        if len(infoset.bet_sequence) > 0 and infoset.bet_sequence[-1] == 1:
+            return 1  # Call all bets
+        else:
+            return 0  # Always check
 
     def get_action(self, infoset: KuhnPoker.KuhnPokerGame.KuhnInfoset) -> int:
         return 0
