@@ -1,5 +1,6 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 import random
+import numpy as np
 
 
 class KuhnNode(object):
@@ -22,10 +23,10 @@ class KuhnNode(object):
         return len(self.bet_sequence) % 2
 
     @staticmethod
-    def _p0_showdown_payoff(player_cards: Tuple[int, int]) -> float:
+    def _p0_showdown_payoff(player_cards: List[int]) -> float:
         return int(player_cards[0] > player_cards[1]) * 2 - 1
 
-    def get_payoffs(self, player_cards: Tuple[int, int]) -> Tuple[float, float]:
+    def get_payoffs(self, player_cards: List[int]) -> np.ndarray:
         if not self.is_terminal:
             raise RuntimeError("Can't get payoffs for non-terminal")
 
@@ -42,7 +43,7 @@ class KuhnNode(object):
         else:
             p0_payoff = self._p0_showdown_payoff(player_cards) * 2
 
-        return p0_payoff, -p0_payoff
+        return np.array([p0_payoff, -p0_payoff])
 
 
 class KuhnInfoset(KuhnNode):
@@ -52,14 +53,17 @@ class KuhnInfoset(KuhnNode):
 
 
 class KuhnGameState(KuhnNode):
-    def __init__(self, player_cards: Tuple[int, int], bet_sequence: Tuple[int, ...]):
+    def __init__(self, player_cards: List[int], bet_sequence: Tuple[int, ...]):
         super().__init__(bet_sequence)
         self.player_cards = player_cards
-        self.infosets = (KuhnInfoset(card, self.bet_sequence) for card in self.player_cards)
+        self.infosets = tuple(KuhnInfoset(card, self.bet_sequence) for card in self.player_cards)
+
+    def get_payoffs(self):
+        return KuhnNode.get_payoffs(self, self.player_cards)
 
 
 class KuhnPokerGame(object):
-    def __init__(self, player_cards: Optional[Tuple[int, int]] = None):
+    def __init__(self, player_cards: Optional[List[int]] = None):
         if player_cards is None:
             player_cards = random.sample(range(3), 2)
 
