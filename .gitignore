@@ -1,0 +1,8 @@
+.idea
+*.pyc
+*.pyo
+*.pyxbldc
+*.log
+.ipynb_checkpoints
+*-checkpoint.ipynb
+*.bak
