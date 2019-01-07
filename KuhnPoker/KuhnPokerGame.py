@@ -54,12 +54,17 @@ class KuhnInfoset(KuhnNode):
 
 class KuhnGameState(KuhnNode):
     def __init__(self, player_cards: List[int], bet_sequence: Tuple[int, ...]):
-        super().__init__(bet_sequence)
         self.player_cards = player_cards
+        super().__init__(bet_sequence)
         self.infosets = tuple(KuhnInfoset(card, self.bet_sequence) for card in self.player_cards)
 
     def get_payoffs(self):
         return KuhnNode.get_payoffs(self, self.player_cards)
+
+    def __setattr__(self, key, value):
+        super().__setattr__(key, value)
+        if key == "bet_sequence":
+            self.infosets = tuple(KuhnInfoset(card, self.bet_sequence) for card in self.player_cards)
 
 
 class KuhnPokerGame(object):
