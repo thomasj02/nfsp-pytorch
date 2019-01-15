@@ -82,3 +82,40 @@ class NashPolicy(Policy):
                     return 1.0 / 3.0
                 else:
                     return 1
+
+
+class PlayerTrajectories(object):
+    def __init__(self):
+        self.states = []
+        self.rewards = []
+        self.probs = []
+        self.actions = []
+
+        self._states_in_progress = []
+        self._rewards_in_progress = []
+        self._probs_in_progress = []
+        self._actions_in_progress = []
+
+    def add_transition(self, state, action, prob, reward):
+        self._states_in_progress.append(state)
+        self._actions_in_progress.append(action)
+        self._probs_in_progress.append(prob)
+        self._rewards_in_progress.append(reward)
+
+    def amend_last_reward(self, new_reward):
+        self._rewards_in_progress[-1] = new_reward
+
+    def complete_trajectory(self):
+        # TODO Discount rate
+        rewards = np.cumsum(self._rewards_in_progress[::-1])[::-1]
+        self.rewards.extend(rewards)
+        self.states.extend(self._states_in_progress)
+        self.probs.extend(self._probs_in_progress)
+        self.actions.extend(self._actions_in_progress)
+
+        self._states_in_progress = []
+        self._rewards_in_progress = []
+        self._probs_in_progress = []
+        self._actions_in_progress = []
+
+

@@ -51,6 +51,9 @@ class KuhnInfoset(KuhnNode):
         super().__init__(bet_sequence)
         self.card = card
 
+    def __eq__(self, other):
+        return self.card == other.card and self.bet_sequence == other.bet_sequence
+
 
 class KuhnGameState(KuhnNode):
     def __init__(self, player_cards: List[int], bet_sequence: Tuple[int, ...]):

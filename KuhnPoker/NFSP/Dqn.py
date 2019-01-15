@@ -7,21 +7,59 @@ import numpy as np
 import random
 from KuhnPoker.Device import device
 from KuhnPoker.PolicyWrapper import infoset_to_state
+from KuhnPoker.Policies import Policy
+from KuhnPoker.KuhnPokerGame import KuhnInfoset
+
+
+class QNetwork(nn.Module):
+    def __init__(self, state_size, action_size):
+        """Initialize parameters and build model.
+        Params
+        ======
+            state_size (int): Dimension of each state
+            action_size (int): Dimension of each action
+            seed (int): Random seed
+        """
+        super(QNetwork, self).__init__()
+
+        self.state_size = state_size
+        self.action_size = action_size
+
+        fc1_units = 64
+        self.fc1 = nn.Linear(state_size, fc1_units)
+        self.fc1_activation = nn.LeakyReLU()
+
+        # fc2_units = 64
+        # self.fc2 = nn.Linear(fc1_units, fc2_units)
+
+        self.fc3 = nn.Linear(fc1_units, action_size)
+
+        torch.nn.init.orthogonal_(self.fc1.weight, torch.nn.init.calculate_gain('relu'))
+        # torch.nn.init.orthogonal_(self.fc2.weight, torch.nn.init.calculate_gain('relu'))
+        torch.nn.init.orthogonal_(self.fc3.weight, torch.nn.init.calculate_gain('linear'))
+
+    def forward(self, state):
+        """Build a network that maps state -> action values."""
+
+        state = self.fc1_activation(self.fc1(state))
+        # state = F.relu(self.fc2(state))
+        state = self.fc3(state)
+
+        return state
+
 
 class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
 
-    def __init__(self, action_size, buffer_size, batch_size, seed):
+    def __init__(self, buffer_size, batch_size, seed):
         """Initialize a ReplayBuffer object.
 
         Params
         ======
-            action_size (int): dimension of each action
             buffer_size (int): maximum size of buffer
             batch_size (int): size of each training batch
             seed (int): random seed
         """
-        self.action_size = action_size
         self.memory = deque(maxlen=buffer_size)
         self.batch_size = batch_size
         self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
@@ -59,40 +97,41 @@ class QPolicyParameters(object):
             gamma: float,
             tau: float,
             epsilon: float,
-            learning_rate: float,
-            update_every: int,):
+            learning_rate: float
+    ):
         self.buffer_size = buffer_size
         self.batch_size = batch_size
         self.gamma = gamma
         self.tau = tau
         self.epsilon = epsilon
         self.learning_rate = learning_rate
-        self.update_every = update_every
 
 
 class QPolicy(object):
     def __init__(
             self,
-            nn_local: nn.Module,
-            nn_target: nn.Module,
-            replay_buffer: ReplayBuffer,
+            nn_local: QNetwork,
+            nn_target: QNetwork,
             parameters: QPolicyParameters):
         self.qnetwork_local = nn_local
         self.qnetwork_target = nn_target
+        self._copy_weights()
         self.parameters = parameters
 
-        self.memory = replay_buffer
-        self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
-        self.time_step = 0
+        self.memory = ReplayBuffer(
+            buffer_size=self.parameters.buffer_size,
+            batch_size=self.parameters.batch_size,
+            seed=42
+        )
 
-    def step(self, state, action, reward, next_state, is_terminal):
+        self.optimizer = optim.SGD(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
+
+    def _copy_weights(self):
+        for target_param, param in zip(self.qnetwork_target.parameters(), self.qnetwork_local.parameters()):
+            target_param.data.copy_(param.data)
+
+    def add_sars(self, state, action, reward, next_state, is_terminal):
         self.memory.add(state, action, reward, next_state, is_terminal)
-
-        self.time_step += 1
-        if self.time_step % self.parameters.update_every == 0:
-            if len(self.memory) > self.parameters.batch_size:
-                experiences = self.memory.sample()
-                self._learn(experiences)
 
     def _get_action_values(self, state, network=None):
         if network is None:
@@ -123,7 +162,7 @@ class QPolicy(object):
             action_size = 2  # Kuhn poker
             return random.choice(np.arange(action_size))
 
-    def _learn(self, experiences):
+    def learn(self, epochs: int):
         """Update value parameters using given batch of experience tuples.
 
         Params
@@ -131,21 +170,29 @@ class QPolicy(object):
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples
             gamma (float): discount factor
         """
-        states, actions, rewards, next_states, dones = experiences
+        if len(self.memory) < self.parameters.batch_size:
+            return
 
-        q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(1)
-        q_targets = rewards + (self.parameters.gamma * q_targets_next * (1 - dones))
+        self.qnetwork_local.train()
+        self.qnetwork_target.eval()
+        for _ in range(epochs):
+            experiences = self.memory.sample()
+            states, actions, rewards, next_states, dones = experiences
 
-        q_local = self.qnetwork_local(states).gather(1, actions)
+            q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(1)
+            q_targets = rewards + (self.parameters.gamma * q_targets_next * (1 - dones))
 
-        loss = F.mse_loss(q_targets, q_local)
+            q_local = self.qnetwork_local(states)
+            q_local = q_local.gather(1, actions)
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+            loss = F.mse_loss(q_targets, q_local)
 
-        # ------------------- update target network ------------------- #
-        self._soft_update()
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            # ------------------- update target network ------------------- #
+            self._soft_update()
 
     def _soft_update(self):
         """Soft update model parameters.
@@ -162,43 +209,16 @@ class QPolicy(object):
                 self.parameters.tau * local_param.data + (1.0 - self.parameters.tau) * target_param.data)
 
 
-class KuhnQPolicy(KuhnPoker.Policies.Policy):
+class KuhnQPolicy(Policy):
     def __init__(self, q_policy: QPolicy):
         self.q_policy = q_policy
 
-    def aggressive_action_prob(self, infoset: KuhnPoker.KuhnPokerGame.KuhnInfoset):
+    def aggressive_action_prob(self, infoset: KuhnInfoset):
+        raise RuntimeError("Q Policies don't have aggressive action probs")
+
+    def get_action(self, infoset: KuhnInfoset):
         state = infoset_to_state(infoset)
         q_policy_action = self.q_policy.act(state, greedy=False)
-        return q_policy_action  # Will be 1 for aggressive, 0 for passive
+        return q_policy_action
 
 
-class QNetwork(nn.Module):
-    def __init__(self, state_size, action_size, seed):
-        """Initialize parameters and build model.
-        Params
-        ======
-            state_size (int): Dimension of each state
-            action_size (int): Dimension of each action
-            seed (int): Random seed
-        """
-        super(QNetwork, self).__init__()
-        self.seed = torch.manual_seed(seed)
-
-        fc1_units = 64
-        self.fc1 = nn.Linear(state_size, fc1_units)
-        self.bn1 = nn.BatchNorm1d(fc1_units)
-
-        fc2_units = 64
-        self.fc2 = nn.Linear(fc1_units, fc2_units)
-        self.bn2 = nn.BatchNorm1d(fc2_units)
-
-        self.fc3 = nn.Linear(fc2_units, action_size)
-
-    def forward(self, state):
-        """Build a network that maps state -> action values."""
-
-        state = F.relu(self.bn1(self.fc1(state)))
-        state = F.relu(self.bn2(self.fc2(state)))
-        state = self.fc3(state)
-
-        return state
