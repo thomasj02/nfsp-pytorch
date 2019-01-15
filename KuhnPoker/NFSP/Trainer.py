@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     initial_episilon = 0.01
     _q_policy_parameters = QPolicyParameters(
-        buffer_size=200_000,
+        buffer_size=2_000,
         batch_size=128,
         gamma=0.99,
         tau=0.03,
@@ -95,7 +95,7 @@ if __name__ == "__main__":
         parameters=_q_policy_parameters)
 
     _supervised_trainer_parameters = SupervisedTrainerParameters(
-        buffer_size=2_000_000_000,
+        buffer_size=200_000,
         batch_size=128,
         learning_rate=0.005
     )
@@ -117,7 +117,7 @@ if __name__ == "__main__":
         collect_trajectories(_nfsp_agents, num_games=128)
         print("128 warmup games")
 
-    _episodes = 1_000_000
+    _episodes = 10_000
     with tqdm(range(_episodes)) as t:
         for e in t:
             collect_trajectories(_nfsp_agents, num_games=64)

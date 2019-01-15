@@ -21,27 +21,25 @@ class SupervisedNetwork(nn.Module):
         self.fc1 = nn.Linear(state_size, fc1_units)
         self.fc1_activation = nn.LeakyReLU()
 
-        fc2_units = 64
+        if action_size <= 2:
+            fc2_units = 1
+        else:
+            fc2_units = action_size
         self.fc2 = nn.Linear(fc1_units, fc2_units)
         self.fc2_activation = nn.LeakyReLU()
 
-        fc3_units = action_size
-        self.fc3 = nn.Linear(fc2_units, fc3_units)
-        self.fc3_activation = nn.LeakyReLU()
-
-        self.softmax = nn.Softmax(dim=1)
+        # self.final_activation = nn.Softmax(dim=1)
+        self.final_activation = nn.Sigmoid()
 
         torch.nn.init.orthogonal_(self.fc1.weight, torch.nn.init.calculate_gain('relu'))
         torch.nn.init.orthogonal_(self.fc2.weight, torch.nn.init.calculate_gain('relu'))
-        torch.nn.init.orthogonal_(self.fc3.weight, torch.nn.init.calculate_gain('relu'))
 
     def forward(self, state):
         """Build a network that maps state -> action values."""
 
         state = self.fc1_activation(self.fc1(state))
         state = self.fc2_activation(self.fc2(state))
-        state = self.fc3_activation(self.fc3(state))
-        state = self.softmax(state)
+        state = self.final_activation(state)
 
         return state
 
@@ -54,7 +52,7 @@ class SupervisedPolicy(Policy):
         state = infoset_to_state(infoset)
         state = torch.from_numpy(np.array(state)).float().unsqueeze(0).to(device)
         nn_retval = self.network.forward(state).cpu().detach()
-        retval = nn_retval.cpu().detach().numpy()[0][1]
+        retval = nn_retval.cpu().detach().numpy()[0][0]
         return retval
 
 
@@ -71,8 +69,10 @@ class SupervisedTrainer(object):
         self.resevoir = Reservoir(self.parameters.buffer_size)
         self.network = network.to(device)
 
-        self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
-        self.loss_fn = nn.CrossEntropyLoss()
+        #self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
+        # self.loss_fn = nn.CrossEntropyLoss()
+        self.loss_fn = nn.BCELoss()
         self.last_loss = None
 
     def add_observation(self, state, action):
@@ -90,7 +90,7 @@ class SupervisedTrainer(object):
             targets = np.array([s[1] for s in samples])
 
             inputs = torch.from_numpy(inputs).float().to(device)
-            targets = torch.from_numpy(targets).long().to(device)
+            targets = torch.from_numpy(targets).float().to(device).unsqueeze(1)
 
             outputs = self.network.forward(inputs)
             loss = self.loss_fn(outputs, targets)
