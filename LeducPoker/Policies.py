@@ -84,6 +84,7 @@ class NashPolicy(Policy):
                 infoset_probs[PlayerActions.CHECK_CALL] = call_prob
                 infoset_probs[PlayerActions.FOLD] = fold_prob
 
+                assert infoset_template not in retval
                 retval[infoset_template] = infoset_probs
 
         return retval

@@ -21,15 +21,14 @@ class LeducNode(object):
     def __init__(
             self,
             bet_sequences: List[Tuple[PlayerActions]],
-            board_card: int):
+            board_card: Optional[int]):
         assert len(bet_sequences) == 2
 
         self._bet_sequences = bet_sequences
-        if self.game_round == 0:
-            self._hidden_board_card = board_card
-            self.board_card = None
-        else:
-            self.board_card = board_card
+        self.board_card = board_card
+
+        if self.game_round == 1:
+            assert self.board_card is not None
 
     @property
     def game_round(self) -> int:
@@ -79,36 +78,27 @@ class LeducNode(object):
 
     @property
     def player_to_act(self) -> int:
+        if self.game_round == 1 and self.board_card is None:
+            return -1  # Chance
         relevant_bet_sequence = self._relevant_bet_sequence()
         return len(relevant_bet_sequence) % 2
 
     # Returns true if we transitioned to a new round, false otherwise
-    def add_action(self, action: PlayerActions) -> bool:
+    def add_action(self, action: PlayerActions):
         if action == PlayerActions.BET_RAISE:
             assert self.can_raise
         elif action == PlayerActions.FOLD:
             assert self.can_fold
 
-        pre_action_game_round = self.game_round
-
         if self.game_round == 0:
-            if len(self.bet_sequences) >= 2 and self.bet_sequences[-1] == PlayerActions.CHECK_CALL:
-                self.board_card = self._hidden_board_card
-            else:
-                self.bet_sequences[0] = self.bet_sequences[0] + (action,)
+            self.bet_sequences[0] = self.bet_sequences[0] + (action,)
         else:
             self.bet_sequences[1] = self.bet_sequences[1] + (action,)
 
-        if pre_action_game_round == 0 and self.game_round == 1:
-            self.board_card = self._hidden_board_card
-            retval = True
-        else:
-            retval = False
-
-        if self.game_round == 1:
+        if self.game_round == 1 and self.player_to_act != -1:
             assert self.board_card is not None
-
-        return retval
+        else:
+            assert self.board_card is None
 
     def _get_half_pot(self) -> float:
         half_pot = 1  # Antes
@@ -187,7 +177,7 @@ class LeducInfoset(LeducNode):
             self,
             card: int,
             bet_sequences: List[Tuple],
-            board_card: int):
+            board_card: Optional[int]):
         super().__init__(bet_sequences=bet_sequences, board_card=board_card)
         self.card = card
 
@@ -198,7 +188,7 @@ class LeducInfoset(LeducNode):
             2: "K"
         }
         retval = card_to_char[self.card % 3]
-        if self.board_card:
+        if self.board_card is not None:
             retval += card_to_char[self.board_card % 3]
 
         retval += ":/"
@@ -219,7 +209,7 @@ class LeducGameState(LeducNode):
             self,
             player_cards: List[int],
             bet_sequences: List[Tuple],
-            board_card: int):
+            board_card: Optional[int]):
         self.player_cards = player_cards
         super().__init__(bet_sequences=bet_sequences, board_card=board_card)
         self.infosets = tuple(
