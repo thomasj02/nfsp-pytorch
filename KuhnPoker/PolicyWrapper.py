@@ -1,7 +1,7 @@
 import KuhnPoker.Policies
 import torch.nn as nn
 import KuhnPoker.KuhnPokerGame
-from KuhnPoker.Device import device
+from Device import device
 import torch
 import numpy as np
 from typing import Optional

@@ -1,7 +1,7 @@
 from KuhnPoker.NFSP.Agent import NfspAgent, collect_trajectories
-from KuhnPoker.NFSP.Dqn import QPolicy, QPolicyParameters, KuhnQPolicy, QNetwork
+from KuhnPoker.NFSP.Dqn import QPolicy, QPolicyParameters, QNetwork
 from KuhnPoker.NFSP.Supervised import SupervisedTrainer, SupervisedTrainerParameters, SupervisedNetwork
-from KuhnPoker.Device import device
+from Device import device
 from KuhnPoker.PolicyWrapper import NnPolicyWrapper, infoset_to_state
 import KuhnPoker.Exploitability as Exploitability
 from KuhnPoker.KuhnPokerGame import KuhnInfoset

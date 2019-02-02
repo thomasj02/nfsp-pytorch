@@ -5,7 +5,7 @@ import torch.nn as nn
 from collections import deque, namedtuple
 import numpy as np
 import random
-from KuhnPoker.Device import device
+from Device import device
 from KuhnPoker.PolicyWrapper import infoset_to_state
 from KuhnPoker.Policies import Policy
 from KuhnPoker.KuhnPokerGame import KuhnInfoset

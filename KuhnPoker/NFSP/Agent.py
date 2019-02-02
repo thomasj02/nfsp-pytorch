@@ -1,13 +1,11 @@
 from KuhnPoker.NFSP.Dqn import QPolicy, KuhnQPolicy
-from KuhnPoker.PolicyWrapper import NnPolicyWrapper, infoset_to_state
+from KuhnPoker.PolicyWrapper import infoset_to_state
 from KuhnPoker.Policies import Policy
-from KuhnPoker.NFSP.Supervised import SupervisedNetwork, SupervisedTrainer, SupervisedPolicy
+from KuhnPoker.NFSP.Supervised import SupervisedTrainer, SupervisedPolicy
 from KuhnPoker.KuhnPokerGame import KuhnInfoset, KuhnPokerGame
 from typing import List, Optional
 import random
 import torch
-import numpy as np
-from KuhnPoker.Device import device
 import torch.nn
 
 

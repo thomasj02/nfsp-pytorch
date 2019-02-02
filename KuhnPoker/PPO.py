@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 import KuhnPoker.KuhnPokerGame as KuhnPokerGame
 import KuhnPoker.Policies as Policies
@@ -10,7 +9,7 @@ import random
 from typing import List
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from KuhnPoker.Device import device
+from Device import device
 from KuhnPoker.PolicyWrapper import infoset_to_state
 
 

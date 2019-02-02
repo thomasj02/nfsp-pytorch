@@ -1,8 +1,7 @@
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
-from KuhnPoker.Device import device
+from Device import device
 from KuhnPoker.NFSP.ReservoirSampling import Reservoir
 import numpy as np
 from KuhnPoker.Policies import Policy
