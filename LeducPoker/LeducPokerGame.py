@@ -200,6 +200,8 @@ class LeducInfoset(LeducNode):
         return retval
 
     def __eq__(self, other):
+        if other is None:
+            return False
         return (self.card == other.card and self._bet_sequences == other.bet_sequences
                 and self.board_card == other.board_card)
 
@@ -216,15 +218,26 @@ class LeducGameState(LeducNode):
             LeducInfoset(card, self._bet_sequences, board_card=board_card)
             for card in self.player_cards)
 
+    def _update_infosets(self):
+        self.infosets = tuple(
+            LeducInfoset(card=card, bet_sequences=self._bet_sequences, board_card=self.board_card) for card in
+            self.player_cards)
+
+    def deal_board_card(self):
+        assert self.board_card is None and self.player_to_act == -1
+        deck = list(LeducPokerGame.DECK)
+        deck.remove(self.player_cards[0])
+        deck.remove(self.player_cards[1])
+        self.board_card = random.choice(deck)
+        self._update_infosets()
+
     def get_payoffs(self):
         return LeducNode.get_payoffs(self, self.player_cards)
 
     def __setattr__(self, key, value):
         super().__setattr__(key, value)
         if key == "bet_sequences":
-            self.infosets = tuple(
-                LeducInfoset(card=card, bet_sequences=self._bet_sequences, board_card=self.board_card)
-                for card in self.player_cards)
+            self._update_infosets()
 
 
 class LeducPokerGame(object):
@@ -235,6 +248,5 @@ class LeducPokerGame(object):
         if player_cards is None:
             cards = random.sample(self.DECK, 3)
             self.player_cards = cards[:2]
-            self.hidden_board_card = cards[-1]   # board card hidden to start
 
-        self.game_state = LeducGameState(player_cards, [(), ()], board_card=self.hidden_board_card)
+        self.game_state = LeducGameState(self.player_cards, [(), ()], board_card=None)
