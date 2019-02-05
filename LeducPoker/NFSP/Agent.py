@@ -71,6 +71,7 @@ class NfspAgent(Policy):
 
 
 def collect_trajectories(agents: List[NfspAgent], num_games: int):
+    samples_collected = 0
     with torch.no_grad():
         for agent in agents:
             agent.q_policy.qnetwork_target.eval()
@@ -93,6 +94,7 @@ def collect_trajectories(agents: List[NfspAgent], num_games: int):
 
                 agent = agents[player_to_act]
                 agent.notify_reward(next_infoset=infoset, reward=0, is_terminal=False)
+                samples_collected += 1
 
                 action = agent.get_action(infoset)
 
@@ -101,3 +103,6 @@ def collect_trajectories(agents: List[NfspAgent], num_games: int):
                     game_rewards = game.game_state.get_payoffs()
                     for agent, reward in zip(agents, game_rewards):
                         agent.notify_reward(reward=reward, next_infoset=None, is_terminal=game.game_state.is_terminal)
+                    samples_collected += 1
+
+        return samples_collected
