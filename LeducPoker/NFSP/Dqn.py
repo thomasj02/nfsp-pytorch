@@ -13,7 +13,7 @@ from typing import List
 
 
 class QNetwork(nn.Module):
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size,  hidden_units: List[int]):
         """Initialize parameters and build model.
         Params
         ======
@@ -26,25 +26,29 @@ class QNetwork(nn.Module):
         self.state_size = state_size
         self.action_size = action_size
 
-        fc1_units = 64
-        self.fc1 = nn.Linear(state_size, fc1_units)
-        self.fc1_activation = nn.LeakyReLU()
+        input_size = state_size
+        self.layers = []
+        for layer_hidden_units in hidden_units:
+            self.layers.append((nn.Linear(input_size, layer_hidden_units), F.relu))
+            input_size = layer_hidden_units
 
-        # fc2_units = 64
-        # self.fc2 = nn.Linear(fc1_units, fc2_units)
+        final_units = action_size
+        self.final_layer = nn.Linear(input_size, final_units)
+        self.layers.append((self.final_layer, None))
 
-        self.fc3 = nn.Linear(fc1_units, action_size)
-
-        torch.nn.init.orthogonal_(self.fc1.weight, torch.nn.init.calculate_gain('relu'))
-        # torch.nn.init.orthogonal_(self.fc2.weight, torch.nn.init.calculate_gain('relu'))
-        torch.nn.init.orthogonal_(self.fc3.weight, torch.nn.init.calculate_gain('linear'))
+        for layer in self.layers:
+            if layer[1] is None:
+                torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('linear'))
+            else:
+                torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
 
     def forward(self, state):
         """Build a network that maps state -> action values."""
 
-        state = self.fc1_activation(self.fc1(state))
-        # state = F.relu(self.fc2(state))
-        state = self.fc3(state)
+        for layer in self.layers:
+            state = layer[0](state)
+            if layer[1]:
+                state = layer[1](state)
 
         return state
 
@@ -125,7 +129,9 @@ class QPolicy(object):
             seed=42
         )
 
+        # self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
         self.optimizer = optim.SGD(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
+        self.epoch_num = 0
 
     def _copy_weights(self):
         for target_param, param in zip(self.qnetwork_target.parameters(), self.qnetwork_local.parameters()):
@@ -199,6 +205,7 @@ class QPolicy(object):
             loss.backward()
             self.optimizer.step()
 
+            self.epoch_num += 1
             # ------------------- update target network ------------------- #
             self._soft_update()
 
@@ -212,9 +219,12 @@ class QPolicy(object):
             target_model (PyTorch model): weights will be copied to
             tau (float): interpolation parameter
         """
-        for target_param, local_param in zip(self.qnetwork_target.parameters(), self.qnetwork_local.parameters()):
-            target_param.data.copy_(
-                self.parameters.tau * local_param.data + (1.0 - self.parameters.tau) * target_param.data)
+        if self.parameters.tau < 1:
+            for target_param, local_param in zip(self.qnetwork_target.parameters(), self.qnetwork_local.parameters()):
+                target_param.data.copy_(
+                    self.parameters.tau * local_param.data + (1.0 - self.parameters.tau) * target_param.data)
+        elif self.epoch_num % self.parameters.tau == 0:
+            self._copy_weights()
 
 
 class LeducQPolicy(Policy):

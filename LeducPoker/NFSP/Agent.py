@@ -70,6 +70,26 @@ class NfspAgent(Policy):
             is_terminal=is_terminal)
 
 
+
+class CompositePolicy(Policy):
+    def __init__(self, policies: List[Policy]):
+        self._policies = policies
+
+    def _get_policy(self, infoset: LeducInfoset):
+        player_to_act = infoset.player_to_act
+        assert 0 <= player_to_act < len(self._policies)
+        policy = self._policies[player_to_act]
+        return policy
+
+    def action_prob(self, infoset: LeducInfoset):
+        policy = self._get_policy(infoset)
+        return policy.action_prob(infoset)
+
+    def get_action(self, infoset: LeducInfoset):
+        policy = self._get_policy(infoset)
+        return policy.get_action(infoset)
+
+
 def collect_trajectories(agents: List[NfspAgent], num_games: int):
     samples_collected = 0
     with torch.no_grad():

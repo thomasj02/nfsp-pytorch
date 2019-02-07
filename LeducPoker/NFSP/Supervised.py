@@ -7,38 +7,43 @@ import numpy as np
 from LeducPoker.Policies import Policy
 from LeducPoker.PolicyWrapper import infoset_to_state
 from LeducPoker.LeducPokerGame import LeducInfoset
+from typing import List
 
 
 class SupervisedNetwork(nn.Module):
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size, hidden_units: List[int]):
         super(SupervisedNetwork, self).__init__()
 
         self.state_size = state_size
         self.action_size = action_size
 
-        fc1_units = 64
-        self.fc1 = nn.Linear(state_size, fc1_units)
-        self.fc1_activation = nn.LeakyReLU()
+        input_size = state_size
+        self.layers = []
+        for layer_hidden_units in hidden_units:
+            self.layers.append((nn.Linear(input_size, layer_hidden_units), nn.LeakyReLU()))
+            input_size = layer_hidden_units
 
         if action_size <= 2:
-            fc2_units = 1
+            final_units = 1
         else:
-            fc2_units = action_size
-        self.fc2 = nn.Linear(fc1_units, fc2_units)
-        self.fc2_activation = nn.LeakyReLU()
+            final_units = action_size
+        self.final_layer = nn.Linear(input_size, final_units)
+        self.final_activation = nn.LeakyReLU()
+        self.layers.append((self.final_layer, self.final_activation))
 
-        self.final_activation = nn.Softmax()
-        # self.final_activation = nn.Sigmoid()
+        self.softmax = nn.Softmax(dim=1)
 
-        torch.nn.init.orthogonal_(self.fc1.weight, torch.nn.init.calculate_gain('relu'))
-        torch.nn.init.orthogonal_(self.fc2.weight, torch.nn.init.calculate_gain('relu'))
+        for layer in self.layers:
+            torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
 
     def forward(self, state):
         """Build a network that maps state -> action values."""
 
-        state = self.fc1_activation(self.fc1(state))
-        state = self.fc2_activation(self.fc2(state))
-        state = self.final_activation(state)
+        for layer in self.layers:
+            state = layer[1](layer[0](state))
+
+        state = self.softmax(self.final_activation(state))
+
 
         return state
 
@@ -72,16 +77,17 @@ class SupervisedTrainerParameters(object):
 class SupervisedTrainer(object):
     def __init__(self, supervised_trainer_parameters: SupervisedTrainerParameters, network: SupervisedNetwork):
         self.parameters = supervised_trainer_parameters
-        self.resevoir = Reservoir(self.parameters.buffer_size)
+        self.reservoir = Reservoir(self.parameters.buffer_size)
         self.network = network.to(device)
 
-        self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
+        # self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
+        self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
         self.loss_fn = nn.CrossEntropyLoss()
         # self.loss_fn = nn.BCELoss()
         self.last_loss = None
 
     def add_observation(self, state, action):
-        self.resevoir.add_sample((state, action))
+        self.reservoir.add_sample((state, action))
 
     def learn(self, epochs):
         self.network.train()
@@ -89,7 +95,7 @@ class SupervisedTrainer(object):
         for _ in range(epochs):
             self.optimizer.zero_grad()
 
-            samples = self.resevoir.sample(self.parameters.batch_size)
+            samples = self.reservoir.sample(self.parameters.batch_size)
 
             inputs = np.array([s[0] for s in samples])
             targets = np.array([s[1] for s in samples])
