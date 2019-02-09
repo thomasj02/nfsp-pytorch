@@ -33,7 +33,8 @@ class NfspAgent(Policy):
         use_q = random.random() < self.nu
         if use_q:
             action = self.leduc_rl_policy.get_action(infoset)
-            self.supervised_trainer.add_observation(state, action)
+            if self.leduc_rl_policy.last_action_greedy:
+                self.supervised_trainer.add_observation(state, action)
             retval = np.zeros(3)
             retval[action] = 1
         else:
