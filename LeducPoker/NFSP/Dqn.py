@@ -171,10 +171,9 @@ class QPolicy(object):
                 if retval not in valid_actions:
                     valid_action_values[retval] = float('-inf')
                     retval = None
-            return retval
-
+            return retval, True
         else:
-            return random.choice(valid_actions)
+            return random.choice(valid_actions), False
 
     def learn(self, epochs: int):
         """Update value parameters using given batch of experience tuples.
@@ -230,6 +229,7 @@ class QPolicy(object):
 class LeducQPolicy(Policy):
     def __init__(self, q_policy: QPolicy):
         self.q_policy = q_policy
+        self.last_action_greedy = False
 
     def action_prob(self, infoset: LeducInfoset):
         raise RuntimeError("Q Policies don't have action probs")
@@ -242,7 +242,7 @@ class LeducQPolicy(Policy):
         if infoset.can_raise:
             valid_actions.append(PlayerActions.BET_RAISE)
 
-        q_policy_action = self.q_policy.act(state, valid_actions=valid_actions, greedy=False)
+        q_policy_action, self.last_action_greedy = self.q_policy.act(state, valid_actions=valid_actions, greedy=False)
         return q_policy_action
 
 
