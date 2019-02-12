@@ -33,6 +33,7 @@ class NfspAgent(Policy):
         use_q = random.random() < self.nu
         if use_q:
             action = self.leduc_rl_policy.get_action(infoset)
+            action = infoset.fixup_action(action)
             self.supervised_trainer.add_observation(state, action)
             retval = np.zeros(3)
             retval[action] = 1
@@ -68,7 +69,6 @@ class NfspAgent(Policy):
             reward=reward,
             next_state=next_state,
             is_terminal=is_terminal)
-
 
 
 class CompositePolicy(Policy):
@@ -117,6 +117,7 @@ def collect_trajectories(agents: List[NfspAgent], num_games: int):
                 samples_collected += 1
 
                 action = agent.get_action(infoset)
+                action = infoset.fixup_action(action)
 
                 game.game_state.add_action(action)
                 if game.game_state.is_terminal:

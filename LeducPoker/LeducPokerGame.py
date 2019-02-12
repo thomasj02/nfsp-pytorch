@@ -93,7 +93,10 @@ class LeducNode(object):
 
     # Returns true if we transitioned to a new round, false otherwise
     def add_action(self, action: PlayerActions):
-        action = self.fixup_action(action)
+        if action == PlayerActions.BET_RAISE:
+            assert self.can_raise
+        elif action == PlayerActions.FOLD:
+            assert self.can_fold
 
         if self.game_round == 0:
             self.bet_sequences[0] = self.bet_sequences[0] + (action,)
