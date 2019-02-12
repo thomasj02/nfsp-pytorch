@@ -6,7 +6,7 @@ from LeducPoker.NFSP.ReservoirSampling import Reservoir
 import numpy as np
 from LeducPoker.Policies import Policy
 from LeducPoker.PolicyWrapper import infoset_to_state
-from LeducPoker.LeducPokerGame import LeducInfoset
+from LeducPoker.LeducPokerGame import LeducInfoset, PlayerActions
 from typing import List
 
 
@@ -44,7 +44,6 @@ class SupervisedNetwork(nn.Module):
 
         state = self.softmax(self.final_activation(state))
 
-
         return state
 
 
@@ -58,6 +57,15 @@ class SupervisedPolicy(Policy):
         nn_retval = self.network.forward(state).cpu().detach()
         retval = nn_retval.cpu().detach().numpy()[0]
 
+        if not infoset.can_raise:
+            retval[PlayerActions.CHECK_CALL] += retval[PlayerActions.BET_RAISE]
+            retval[PlayerActions.BET_RAISE] = 0
+        if not infoset.can_fold:
+            retval[PlayerActions.CHECK_CALL] += retval[PlayerActions.FOLD]
+            retval[PlayerActions.FOLD] = 0
+
+        retval /= retval.sum()
+        
         return retval
 
 
