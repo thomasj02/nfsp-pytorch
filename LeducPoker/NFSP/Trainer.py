@@ -143,7 +143,7 @@ def log_qvals(
 
 
 def make_agent(q_policy_parameters, supervised_trainer_parameters, nu):
-    network_units = [64]
+    network_units = [128,128]
     state_size = infoset_to_state(LeducInfoset(card=0, bet_sequences=[(), ()], board_card=None)).shape[0]
     q_network_local = QNetwork(state_size=state_size, action_size=3, hidden_units=network_units).to(device)
     #q_network_target = QNetwork(state_size=state_size, action_size=3, hidden_units=network_units).to(device)

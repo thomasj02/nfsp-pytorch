@@ -43,6 +43,14 @@ class LeducNode(object):
         else:
             return relevant_bet_sequences.count(PlayerActions.BET_RAISE) < 2
 
+    def fixup_action(self, action: PlayerActions):
+        if action == PlayerActions.FOLD and not self.can_fold:
+            return PlayerActions.CHECK_CALL
+        elif action == PlayerActions.BET_RAISE and not self.can_raise:
+            return PlayerActions.CHECK_CALL
+        else:
+            return action
+
     @property
     def can_fold(self) -> bool:
         relevant_bet_sequence = self._relevant_bet_sequence()
@@ -85,10 +93,7 @@ class LeducNode(object):
 
     # Returns true if we transitioned to a new round, false otherwise
     def add_action(self, action: PlayerActions):
-        if action == PlayerActions.BET_RAISE:
-            assert self.can_raise
-        elif action == PlayerActions.FOLD:
-            assert self.can_fold
+        action = self.fixup_action(action)
 
         if self.game_round == 0:
             self.bet_sequences[0] = self.bet_sequences[0] + (action,)

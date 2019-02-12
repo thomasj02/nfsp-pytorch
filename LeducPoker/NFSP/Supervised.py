@@ -6,7 +6,7 @@ from LeducPoker.NFSP.ReservoirSampling import Reservoir
 import numpy as np
 from LeducPoker.Policies import Policy
 from LeducPoker.PolicyWrapper import infoset_to_state
-from LeducPoker.LeducPokerGame import LeducInfoset
+from LeducPoker.LeducPokerGame import LeducInfoset, PlayerActions
 from typing import List
 from torchsummary import summary
 
@@ -48,6 +48,8 @@ class SupervisedNetwork(nn.Module):
         for layer in self.layers:
             state = layer(state)
 
+        state = self.softmax(self.final_activation(state))
+
         return state
 
 
@@ -62,10 +64,13 @@ class SupervisedPolicy(Policy):
         nn_retval = self.network.softmax(nn_retval)
         retval = nn_retval.cpu().detach().numpy()[0]
 
-        if not infoset.can_fold:
-            retval[0] = 0
         if not infoset.can_raise:
-            retval[2] = 0
+            retval[PlayerActions.CHECK_CALL] += retval[PlayerActions.BET_RAISE]
+            retval[PlayerActions.BET_RAISE] = 0
+        if not infoset.can_fold:
+            retval[PlayerActions.CHECK_CALL] += retval[PlayerActions.FOLD]
+            retval[PlayerActions.FOLD] = 0
+
         retval /= retval.sum()
 
         return retval
@@ -84,8 +89,8 @@ class SupervisedTrainer(object):
         self.reservoir = Reservoir(self.parameters.buffer_size)
         self.network = network.to(device)
 
-        # self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
-        self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
+        # self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
         self.loss_fn = nn.CrossEntropyLoss()
         # self.loss_fn = nn.BCELoss()
         self.last_loss = None
