@@ -8,6 +8,7 @@ from LeducPoker.Policies import Policy
 from LeducPoker.PolicyWrapper import infoset_to_state
 from LeducPoker.LeducPokerGame import LeducInfoset
 from typing import List
+from torchsummary import summary
 
 
 class SupervisedNetwork(nn.Module):
@@ -20,30 +21,32 @@ class SupervisedNetwork(nn.Module):
         input_size = state_size
         self.layers = []
         for layer_hidden_units in hidden_units:
-            self.layers.append((nn.Linear(input_size, layer_hidden_units), nn.LeakyReLU()))
+            self.layers.append(nn.Linear(input_size, layer_hidden_units))
+            self.layers.append(nn.LeakyReLU())
             input_size = layer_hidden_units
 
         if action_size <= 2:
             final_units = 1
         else:
             final_units = action_size
-        self.final_layer = nn.Linear(input_size, final_units)
-        self.final_activation = nn.LeakyReLU()
-        self.layers.append((self.final_layer, self.final_activation))
+        self.layers.append(nn.Linear(input_size, final_units))
+        self.layers.append(nn.LeakyReLU())
+        self.layers = nn.ModuleList(self.layers)
 
         self.softmax = nn.Softmax(dim=1)
 
-        for layer in self.layers:
-            torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
+        # for layer in self.layers:
+        #     torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
+        print("SupervisedNetwork:")
+        print(self)
+        summary(self, (self.state_size,), device=device)
+
 
     def forward(self, state):
         """Build a network that maps state -> action values."""
 
         for layer in self.layers:
-            state = layer[1](layer[0](state))
-
-        state = self.softmax(self.final_activation(state))
-
+            state = layer(state)
 
         return state
 
@@ -56,6 +59,7 @@ class SupervisedPolicy(Policy):
         state = infoset_to_state(infoset)
         state = torch.from_numpy(np.array(state)).float().unsqueeze(0).to(device)
         nn_retval = self.network.forward(state).cpu().detach()
+        nn_retval = self.network.softmax(nn_retval)
         retval = nn_retval.cpu().detach().numpy()[0]
 
         if not infoset.can_fold:

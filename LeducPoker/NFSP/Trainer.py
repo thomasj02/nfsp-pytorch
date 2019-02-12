@@ -146,7 +146,8 @@ def make_agent(q_policy_parameters, supervised_trainer_parameters, nu):
     network_units = [64]
     state_size = infoset_to_state(LeducInfoset(card=0, bet_sequences=[(), ()], board_card=None)).shape[0]
     q_network_local = QNetwork(state_size=state_size, action_size=3, hidden_units=network_units).to(device)
-    q_network_target = QNetwork(state_size=state_size, action_size=3, hidden_units=network_units).to(device)
+    #q_network_target = QNetwork(state_size=state_size, action_size=3, hidden_units=network_units).to(device)
+    q_network_target = None
 
     q_policy = QPolicy(
         nn_local=q_network_local,
@@ -211,10 +212,12 @@ if __name__ == "__main__":
     )
 
     _nu = 0.1
-    _single_agent = make_agent(_q_policy_parameters, _supervised_trainer_parameters, _nu)
+    # _single_agent = make_agent(_q_policy_parameters, _supervised_trainer_parameters, _nu)
     _nfsp_agents = [
-        _single_agent,
-        _single_agent
+        make_agent(_q_policy_parameters, _supervised_trainer_parameters, _nu),
+        make_agent(_q_policy_parameters, _supervised_trainer_parameters, _nu)
+        # _single_agent,
+        # _single_agent
     ]
     _composite_supervised_policy = CompositePolicy([agent.leduc_supervised_policy for agent in _nfsp_agents])
 
@@ -240,8 +243,11 @@ if __name__ == "__main__":
             logger.debug("Epoch begins: %s", e)
             collect_trajectories(_nfsp_agents, num_games=128)
 
-            _single_agent.q_policy.learn(2)
-            _single_agent.supervised_trainer.learn(2)
+            for _agent in _nfsp_agents:
+                _agent.q_policy.learn(2)
+                _agent.supervised_trainer.learn(2)
+            # _single_agent.q_policy.learn(2)
+            # _single_agent.supervised_trainer.learn(2)
 
             with torch.no_grad():
                 [agent.leduc_supervised_policy.network.eval() for agent in _nfsp_agents]
@@ -261,7 +267,7 @@ if __name__ == "__main__":
                     _q_policy_parameters.epsilon)
 
                 if _args.log_strategy:
-                    _strategy_logger.log_strategy(policy=_single_agent.leduc_supervised_policy, global_step=e)
+                    _strategy_logger.log_strategy(policy=_composite_supervised_policy, global_step=e)
 
                 if _args.log_q:
                     log_qvals(
@@ -271,7 +277,8 @@ if __name__ == "__main__":
                         global_step=e,
                         text_only=_args.log_text_only)
 
-            _q_policy_parameters.epsilon = _initial_episilon - _initial_episilon * math.sqrt(e) / math.sqrt(_episodes)
+            _q_policy_parameters.epsilon = _initial_episilon
+            _q_policy_parameters.epsilon = _initial_episilon / (1 + 1e-2 * math.sqrt(e))
 
     _writer.close()
     print("Done")

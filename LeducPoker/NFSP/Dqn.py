@@ -10,6 +10,7 @@ from LeducPoker.PolicyWrapper import infoset_to_state
 from LeducPoker.Policies import Policy
 from LeducPoker.LeducPokerGame import LeducInfoset, PlayerActions
 from typing import List
+from torchsummary import summary
 
 
 class QNetwork(nn.Module):
@@ -29,26 +30,28 @@ class QNetwork(nn.Module):
         input_size = state_size
         self.layers = []
         for layer_hidden_units in hidden_units:
-            self.layers.append((nn.Linear(input_size, layer_hidden_units), F.relu))
+            self.layers.append(nn.Linear(input_size, layer_hidden_units))
+            self.layers.append(nn.ReLU())
             input_size = layer_hidden_units
 
         final_units = action_size
-        self.final_layer = nn.Linear(input_size, final_units)
-        self.layers.append((self.final_layer, None))
+        self.layers.append(nn.Linear(input_size, final_units))
+        self.layers = nn.ModuleList(self.layers)
 
-        for layer in self.layers:
-            if layer[1] is None:
-                torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('linear'))
-            else:
-                torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
+        # for layer in self.layers:
+        #     if layer[1] is None:
+        #         torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('linear'))
+        #     else:
+        #         torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
+        print("QNetwork:")
+        print(self)
+        summary(self, (self.state_size,), device=device)
 
     def forward(self, state):
         """Build a network that maps state -> action values."""
 
         for layer in self.layers:
-            state = layer[0](state)
-            if layer[1]:
-                state = layer[1](state)
+            state = layer(state)
 
         return state
 
@@ -72,6 +75,8 @@ class ReplayBuffer:
 
     def add(self, state, action, reward, next_state, done):
         """Add a new experience to memory."""
+        reward *= 0.0385  # Arbitrary reward scaling from Heinrich Lua code
+
         e = self.experience(state, action, reward, next_state, done)
         self.memory.append(e)
 
@@ -120,7 +125,12 @@ class QPolicy(object):
             parameters: QPolicyParameters):
         self.qnetwork_local = nn_local
         self.qnetwork_target = nn_target
-        self._copy_weights()
+
+        if self.qnetwork_target is not None:
+            self._copy_weights()
+        else:
+            self.qnetwork_target = self.qnetwork_local
+
         self.parameters = parameters
 
         self.memory = ReplayBuffer(
@@ -132,6 +142,10 @@ class QPolicy(object):
         # self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
         self.optimizer = optim.SGD(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
         self.epoch_num = 0
+
+    def eval(self):
+        self.qnetwork_local.eval()
+        self.qnetwork_target.eval()
 
     def _copy_weights(self):
         for target_param, param in zip(self.qnetwork_target.parameters(), self.qnetwork_local.parameters()):
@@ -186,15 +200,18 @@ class QPolicy(object):
         if len(self.memory) < self.parameters.batch_size:
             return
 
-        self.qnetwork_local.train()
         self.qnetwork_target.eval()
         for _ in range(epochs):
             experiences = self.memory.sample()
             states, actions, rewards, next_states, dones = experiences
 
-            q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(1)
+            if self.qnetwork_target is not None:
+                q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(1)
+            else:
+                q_targets_next = self.qnetwork_local(next_states).detach().max(1)[0].unsqueeze(1)
             q_targets = rewards + (self.parameters.gamma * q_targets_next * (1 - dones))
 
+            self.qnetwork_local.train()
             q_local = self.qnetwork_local(states)
             q_local = q_local.gather(1, actions)
 
@@ -218,6 +235,10 @@ class QPolicy(object):
             target_model (PyTorch model): weights will be copied to
             tau (float): interpolation parameter
         """
+
+        if not self.qnetwork_target or self.qnetwork_local == self.qnetwork_target:
+            return
+
         if self.parameters.tau < 1:
             for target_param, local_param in zip(self.qnetwork_target.parameters(), self.qnetwork_local.parameters()):
                 target_param.data.copy_(

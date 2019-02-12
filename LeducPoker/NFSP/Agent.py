@@ -33,8 +33,9 @@ class NfspAgent(Policy):
         use_q = random.random() < self.nu
         if use_q:
             action = self.leduc_rl_policy.get_action(infoset)
-            if self.leduc_rl_policy.last_action_greedy:
-                self.supervised_trainer.add_observation(state, action)
+            # if self.leduc_rl_policy.last_action_greedy:
+            #     self.supervised_trainer.add_observation(state, action)
+            self.supervised_trainer.add_observation(state, action)
             retval = np.zeros(3)
             retval[action] = 1
         else:
@@ -95,8 +96,7 @@ def collect_trajectories(agents: List[NfspAgent], num_games: int):
     samples_collected = 0
     with torch.no_grad():
         for agent in agents:
-            agent.q_policy.qnetwork_target.eval()
-            agent.q_policy.qnetwork_local.eval()
+            agent.q_policy.eval()
             agent.supervised_trainer.network.eval()
 
         for _ in range(num_games):
