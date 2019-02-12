@@ -58,12 +58,6 @@ class SupervisedPolicy(Policy):
         nn_retval = self.network.forward(state).cpu().detach()
         retval = nn_retval.cpu().detach().numpy()[0]
 
-        if not infoset.can_fold:
-            retval[0] = 0
-        if not infoset.can_raise:
-            retval[2] = 0
-        retval /= retval.sum()
-
         return retval
 
 

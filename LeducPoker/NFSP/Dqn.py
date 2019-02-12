@@ -172,7 +172,6 @@ class QPolicy(object):
                     valid_action_values[retval] = float('-inf')
                     retval = None
             return retval
-
         else:
             return random.choice(valid_actions)
 
@@ -234,15 +233,9 @@ class LeducQPolicy(Policy):
     def action_prob(self, infoset: LeducInfoset):
         raise RuntimeError("Q Policies don't have action probs")
 
-    def get_action(self, infoset: LeducInfoset):
+    def get_action(self, infoset: LeducInfoset) -> PlayerActions:
         state = infoset_to_state(infoset)
-        valid_actions = [PlayerActions.CHECK_CALL]
-        if infoset.can_fold:
-            valid_actions.append(PlayerActions.FOLD)
-        if infoset.can_raise:
-            valid_actions.append(PlayerActions.BET_RAISE)
+        valid_actions = PlayerActions.ALL_ACTIONS
 
         q_policy_action = self.q_policy.act(state, valid_actions=valid_actions, greedy=False)
         return q_policy_action
-
-
