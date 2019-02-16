@@ -8,7 +8,7 @@ import numpy as np
 from typing import Optional
 
 
-def infoset_to_state(infoset: Optional[LeducPoker.LeducPokerGame.LeducInfoset]) -> np.ndarray:
+def infoset_to_state_30(infoset: Optional[LeducPoker.LeducPokerGame.LeducInfoset]) -> np.ndarray:
     num_rounds = 2
     max_raises = 2
     num_players = 2
@@ -41,38 +41,41 @@ def infoset_to_state(infoset: Optional[LeducPoker.LeducPokerGame.LeducInfoset]) 
     return retval
 
 
-# def infoset_to_state(infoset: Optional[LeducPoker.LeducPokerGame.LeducInfoset]) -> np.ndarray:
-#     state = np.zeros(3 * 2 + 2 * 8)  # 22
-#
-#     if infoset is None:
-#         return state
-#
-#     state_idx = 0
-#     # 3 one-hots for card
-#     state[state_idx + infoset.card % 3] = 1
-#     state_idx += 3
-#
-#     # 3 one-hots for board
-#     if infoset.board_card:
-#         state[state_idx + infoset.board_card % 3] = 1
-#     state_idx += 3
-#
-#     # 2 rounds, 4 one-hot each (so 8 per round)
-#     # Rounds are encoded as one of [check/call; bet/raise]
-#     for action_idx, action in enumerate(infoset.bet_sequences[0]):
-#         if action == PlayerActions.CHECK_CALL:
-#             state[state_idx + 2 * action_idx] = 1
-#         else:
-#             state[state_idx + 2 * action_idx + 1] = 1
-#     state_idx += 2 * 4
-#
-#     for action_idx, action in enumerate(infoset.bet_sequences[1]):
-#         if action == PlayerActions.CHECK_CALL:
-#             state[state_idx + 2 * action_idx] = 1
-#         else:
-#             state[state_idx + 2 * action_idx + 1] = 1
-#
-#     return state
+def infoset_to_state_22(infoset: Optional[LeducPoker.LeducPokerGame.LeducInfoset]) -> np.ndarray:
+    state = np.zeros(3 * 2 + 2 * 8)  # 22
+
+    if infoset is None:
+        return state
+
+    state_idx = 0
+    # 3 one-hots for card
+    state[state_idx + infoset.card % 3] = 1
+    state_idx += 3
+
+    # 3 one-hots for board
+    if infoset.board_card:
+        state[state_idx + infoset.board_card % 3] = 1
+    state_idx += 3
+
+    # 2 rounds, 4 one-hot each (so 8 per round)
+    # Rounds are encoded as one of [check/call; bet/raise]
+    for action_idx, action in enumerate(infoset.bet_sequences[0]):
+        if action == PlayerActions.CHECK_CALL:
+            state[state_idx + 2 * action_idx] = 1
+        else:
+            state[state_idx + 2 * action_idx + 1] = 1
+    state_idx += 2 * 4
+
+    for action_idx, action in enumerate(infoset.bet_sequences[1]):
+        if action == PlayerActions.CHECK_CALL:
+            state[state_idx + 2 * action_idx] = 1
+        else:
+            state[state_idx + 2 * action_idx + 1] = 1
+
+    return state
+
+
+infoset_to_state = infoset_to_state_30
 
 
 class NnPolicyWrapper(LeducPoker.Policies.Policy):

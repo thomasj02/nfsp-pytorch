@@ -91,19 +91,45 @@ class LeducNode(object):
         relevant_bet_sequence = self._relevant_bet_sequence()
         return len(relevant_bet_sequence) % 2
 
-    # Returns true if we transitioned to a new round, false otherwise
-    def add_action(self, action: PlayerActions):
+    # Returns cost of taking action
+    def add_action(self, action: PlayerActions) -> int:
         action = self.fixup_action(action)
 
-        if self.game_round == 0:
+        game_round = self.game_round
+        retval = 0
+        if game_round == 0:
+            if len(self.bet_sequences[0]) < 2:
+                retval = 1  # Antes
+
+            if len(self.bet_sequences[0]) > 0 and self.bet_sequences[0][-1] == PlayerActions.BET_RAISE:
+                retval += 2  # 2 to call
+
+            if action == PlayerActions.BET_RAISE:
+                retval += 2
+
             self.bet_sequences[0] = self.bet_sequences[0] + (action,)
         else:
+            if len(self.bet_sequences[1]) > 0 and self.bet_sequences[1][-1] == PlayerActions.BET_RAISE:
+                retval = 4  # 4 to call
+
+            if action == PlayerActions.BET_RAISE:
+                retval += 4
+
             self.bet_sequences[1] = self.bet_sequences[1] + (action,)
 
         if self.game_round == 1 and self.player_to_act != -1:
             assert self.board_card is not None
         else:
             assert self.board_card is None
+
+        # one fixup: if they folded
+        if action == PlayerActions.FOLD:
+            if game_round == 0 and len(self.bet_sequences[0]) <= 2:
+                retval = 1  # Ante
+            else:
+                retval = 0
+
+        return retval
 
     def _get_half_pot(self) -> float:
         half_pot = 1  # Antes
@@ -165,16 +191,16 @@ class LeducNode(object):
         if not self.is_terminal:
             raise RuntimeError("Can't get payoffs for non-terminal")
 
-        winner = self._get_winner(player_cards)
-        if winner is None:
-            return np.array([0, 0])
-
         half_pot = self._get_half_pot()
 
+        winner = self._get_winner(player_cards)
+        if winner is None:
+            return np.array([half_pot, half_pot])
+
         if winner == 0:
-            return np.array([half_pot, -half_pot])
+            return np.array([half_pot * 2, 0])
         elif winner == 1:
-            return np.array([-half_pot, half_pot])
+            return np.array([0, half_pot * 2])
 
 
 class LeducInfoset(LeducNode):
@@ -251,7 +277,7 @@ class LeducPokerGame(object):
 
     def __init__(self, player_cards: Optional[List[int]] = None):
         if player_cards is None:
-            cards = random.sample(self.DECK, 3)
-            self.player_cards = cards[:2]
+            cards = random.sample(self.DECK, 2)
+            self.player_cards = cards
 
         self.game_state = LeducGameState(self.player_cards, [(), ()], board_card=None)

@@ -22,7 +22,7 @@ class SupervisedNetwork(nn.Module):
         self.layers = []
         for layer_hidden_units in hidden_units:
             self.layers.append(nn.Linear(input_size, layer_hidden_units))
-            self.layers.append(nn.LeakyReLU())
+            self.layers.append(nn.ReLU())
             input_size = layer_hidden_units
 
         if action_size <= 2:
@@ -30,7 +30,7 @@ class SupervisedNetwork(nn.Module):
         else:
             final_units = action_size
         self.layers.append(nn.Linear(input_size, final_units))
-        self.layers.append(nn.LeakyReLU())
+        # self.layers.append(nn.ReLU())
         self.layers = nn.ModuleList(self.layers)
 
         self.softmax = nn.Softmax(dim=1)
@@ -38,17 +38,13 @@ class SupervisedNetwork(nn.Module):
         # for layer in self.layers:
         #     torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
         print("SupervisedNetwork:")
-        print(self)
         summary(self, (self.state_size,), device=device)
-
 
     def forward(self, state):
         """Build a network that maps state -> action values."""
 
         for layer in self.layers:
             state = layer(state)
-
-        state = self.softmax(self.final_activation(state))
 
         return state
 
@@ -89,8 +85,8 @@ class SupervisedTrainer(object):
         self.reservoir = Reservoir(self.parameters.buffer_size)
         self.network = network.to(device)
 
-        self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
-        # self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
+        #self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
+        self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
         self.loss_fn = nn.CrossEntropyLoss()
         # self.loss_fn = nn.BCELoss()
         self.last_loss = None
@@ -99,6 +95,9 @@ class SupervisedTrainer(object):
         self.reservoir.add_sample((state, action))
 
     def learn(self, epochs):
+        if len(self.reservoir.samples) < max(self.parameters.batch_size, 1000):  # 1000 from nfsp lua code
+            return
+
         self.network.train()
 
         for _ in range(epochs):

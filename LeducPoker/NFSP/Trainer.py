@@ -143,7 +143,7 @@ def log_qvals(
 
 
 def make_agent(q_policy_parameters, supervised_trainer_parameters, nu):
-    network_units = [128,128]
+    network_units = [64]
     state_size = infoset_to_state(LeducInfoset(card=0, bet_sequences=[(), ()], board_card=None)).shape[0]
     q_network_local = QNetwork(state_size=state_size, action_size=3, hidden_units=network_units).to(device)
     #q_network_target = QNetwork(state_size=state_size, action_size=3, hidden_units=network_units).to(device)
@@ -230,22 +230,22 @@ if __name__ == "__main__":
         p1_strat_filename="/home/tjohnson/PycharmProjects/PokerRL/LeducPoker/fullgame_strats/strat2")
 
     _strategy_logger = StrategyLogger(writer=_writer, nash_policy=_nash_policy, text_only=_args.log_text_only)
-    while any(
-            len(a.supervised_trainer.reservoir.samples) < _supervised_trainer_parameters.batch_size
-            for a in _nfsp_agents):
-        collect_trajectories(_nfsp_agents, num_games=128)
-        logger.info("128 warmup games")
+    # while any(
+    #         len(a.supervised_trainer.reservoir.samples) < _supervised_trainer_parameters.batch_size
+    #         for a in _nfsp_agents):
+    #     collect_trajectories(_nfsp_agents, num_games=128)
+    #     logger.info("128 warmup games")
 
     _episodes = _args.epochs
 
     with tqdm(range(_episodes)) as t:
         for e in t:
             logger.debug("Epoch begins: %s", e)
-            collect_trajectories(_nfsp_agents, num_games=128)
+            collect_trajectories(_nfsp_agents, num_games=1000, max_samples=128)
 
             for _agent in _nfsp_agents:
-                _agent.q_policy.learn(2)
-                _agent.supervised_trainer.learn(2)
+                _agent.q_policy.learn(1)
+                _agent.supervised_trainer.learn(1)
             # _single_agent.q_policy.learn(2)
             # _single_agent.supervised_trainer.learn(2)
 
@@ -256,9 +256,29 @@ if __name__ == "__main__":
                 _writer.add_scalar("exploitability/exploitability", exploitability["exploitability"], global_step=e)
                 _writer.add_scalar("exploitability/p0_value", exploitability["p0_value"], global_step=e)
                 _writer.add_scalar("exploitability/p1_value", exploitability["p1_value"], global_step=e)
-                _writer.add_scalar("losses/supervised/p0", _nfsp_agents[0].supervised_trainer.last_loss, global_step=e)
-                _writer.add_scalar("losses/supervised/p1", _nfsp_agents[1].supervised_trainer.last_loss, global_step=e)
-                _writer.add_scalar("epsilon", _q_policy_parameters.epsilon, global_step=e)
+
+                if _nfsp_agents[0].supervised_trainer.last_loss is not None:
+                    _writer.add_scalar("losses/supervised/p0", _nfsp_agents[0].supervised_trainer.last_loss,
+                                       global_step=e)
+                if _nfsp_agents[1].supervised_trainer.last_loss is not None:
+                    _writer.add_scalar("losses/supervised/p1", _nfsp_agents[1].supervised_trainer.last_loss,
+                                   global_step=e)
+
+                if _nfsp_agents[0].q_policy.last_loss is not None:
+                    _writer.add_scalar("losses/rl/p0", _nfsp_agents[0].q_policy.last_loss,
+                                       global_step=e)
+                if _nfsp_agents[1].q_policy.last_loss is not None:
+                    _writer.add_scalar("losses/rl/p1", _nfsp_agents[1].q_policy.last_loss,
+                                   global_step=e)
+
+                _writer.add_scalar("globals/epsilon", _q_policy_parameters.epsilon, global_step=e)
+                _writer.add_scalar("globals/rl_mem_p0", len(_nfsp_agents[0].q_policy.memory), global_step=e)
+                _writer.add_scalar("globals/rl_mem_p1", len(_nfsp_agents[1].q_policy.memory), global_step=e)
+                _writer.add_scalar("globals/sl_mem_p0", len(_nfsp_agents[0].supervised_trainer.reservoir.samples),
+                                   global_step=e)
+                _writer.add_scalar("globals/sl_mem_p1", len(_nfsp_agents[1].supervised_trainer.reservoir.samples),
+                                   global_step=e)
+
                 t.set_postfix({"exploitability": exploitability, "epsilon": _q_policy_parameters.epsilon})
 
                 logger.debug(

@@ -185,6 +185,87 @@ class CanRaiseTest(unittest.TestCase):
         self.assertFalse(LeducPokerGame.LeducNode([r1_actions, bet_sequence], board_card=0).can_raise)
 
 
+class AddActionTest(unittest.TestCase):
+    def test_first_check_is_antes(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[(),()], board_card=None).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(1, cost)
+
+    def test_first_bet(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[(),()], board_card=None).add_action(PlayerActions.BET_RAISE)
+        self.assertEqual(3, cost)
+
+    def test_raise_fold(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[(PlayerActions.BET_RAISE,),()],
+                                        board_card=None).add_action(PlayerActions.FOLD)
+        self.assertEqual(1, cost)
+
+    def test_cc_r1(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[(PlayerActions.CHECK_CALL,),()],
+                                        board_card=None).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(1, cost)
+
+    def test_call_r1(self):
+        cost = LeducPokerGame.LeducNode(
+            bet_sequences=[(PlayerActions.BET_RAISE,),()], board_card=None).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(3, cost)
+
+    def test_reraise_r1(self):
+        cost = LeducPokerGame.LeducNode(
+            bet_sequences=[(PlayerActions.BET_RAISE,),()], board_card=None).add_action(PlayerActions.BET_RAISE)
+        self.assertEqual(5, cost)
+
+    def test_call_reraise_r1(self):
+        cost = LeducPokerGame.LeducNode(
+            bet_sequences=[
+                (PlayerActions.BET_RAISE, PlayerActions.BET_RAISE),
+                ()], board_card=None).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(2, cost)
+
+    def test_final_call_r1(self):
+        cost = LeducPokerGame.LeducNode(
+            bet_sequences=[
+                (PlayerActions.BET_RAISE, PlayerActions.BET_RAISE, PlayerActions.BET_RAISE),
+                ()], board_card=None).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(2, cost)
+
+    def test_first_check_is_free_r2(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[
+            (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
+            ()], board_card=0).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(0, cost)
+
+    def test_first_bet_r2(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[
+            (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
+            ()], board_card=0).add_action(PlayerActions.BET_RAISE)
+        self.assertEqual(4, cost)
+
+    def test_call_r2(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[
+            (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
+            (PlayerActions.BET_RAISE,)], board_card=0).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(4, cost)
+
+    def test_reraise_r2(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[
+            (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
+            (PlayerActions.BET_RAISE,)], board_card=0).add_action(PlayerActions.BET_RAISE)
+        self.assertEqual(8, cost)
+
+    def test_call_reraise_r2(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[
+            (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
+            (PlayerActions.BET_RAISE, PlayerActions.BET_RAISE)], board_card=0).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(4, cost)
+
+    def test_final_call_r2(self):
+        cost = LeducPokerGame.LeducNode(bet_sequences=[
+            (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
+            (PlayerActions.BET_RAISE, PlayerActions.BET_RAISE, PlayerActions.BET_RAISE)],
+            board_card=0).add_action(PlayerActions.CHECK_CALL)
+        self.assertEqual(4, cost)
+
+
 class PayoffsTest(unittest.TestCase):
     def test_nonterminal_payoff_raises_exception(self):
         with self.assertRaises(RuntimeError):
@@ -194,96 +275,96 @@ class PayoffsTest(unittest.TestCase):
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
                          (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([-1, 1], payoffs.tolist())
+        self.assertEqual([0, 2], payoffs.tolist())
 
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([2, 1])
-        self.assertEqual([1, -1], payoffs.tolist())
+        self.assertEqual([2, 0], payoffs.tolist())
 
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([2, 2])
-        self.assertEqual([0, 0], payoffs.tolist())
+        self.assertEqual([1, 1], payoffs.tolist())
 
     def test_board_card_plays(self):
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
                          (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([0, 2])
-        self.assertEqual([1, -1], payoffs.tolist())
+        self.assertEqual([2, 0], payoffs.tolist())
 
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([2, 0])
-        self.assertEqual([-1, 1], payoffs.tolist())
+        self.assertEqual([0, 2], payoffs.tolist())
 
     def test_suits_are_equivalent(self):
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
                          (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([3, 2])
-        self.assertEqual([1, -1], payoffs.tolist())
+        self.assertEqual([2, 0], payoffs.tolist())
 
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=3).get_payoffs([0, 2])
-        self.assertEqual([1, -1], payoffs.tolist())
+        self.assertEqual([2, 0], payoffs.tolist())
 
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=2).get_payoffs([0, 5])
-        self.assertEqual([-1, 1], payoffs.tolist())
+        self.assertEqual([0, 2], payoffs.tolist())
 
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=5).get_payoffs([0, 2])
-        self.assertEqual([-1, 1], payoffs.tolist())
+        self.assertEqual([0, 2], payoffs.tolist())
 
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=1).get_payoffs([0, 4])
-        self.assertEqual([-1, 1], payoffs.tolist())
+        self.assertEqual([0, 2], payoffs.tolist())
 
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=4).get_payoffs([0, 1])
-        self.assertEqual([-1, 1], payoffs.tolist())
+        self.assertEqual([0, 2], payoffs.tolist())
 
     def test_bet_fold(self):
         bet_sequences = [(PlayerActions.BET_RAISE, PlayerActions.FOLD), ()]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([1, -1], payoffs.tolist())
+        self.assertEqual([2, 0], payoffs.tolist())
 
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.BET_RAISE, PlayerActions.FOLD), ()]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([2, 1])
-        self.assertEqual([-1, 1], payoffs.tolist())
+        self.assertEqual([0, 2], payoffs.tolist())
 
     def test_bet_raise_fold(self):
         bet_sequences = [(PlayerActions.BET_RAISE, PlayerActions.BET_RAISE, PlayerActions.FOLD), ()]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([-3, 3], payoffs.tolist())
+        self.assertEqual([0, 6], payoffs.tolist())
 
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.BET_RAISE, PlayerActions.BET_RAISE,
                                 PlayerActions.FOLD), ()]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([2, 1])
-        self.assertEqual([3, -3], payoffs.tolist())
+        self.assertEqual([6, 0], payoffs.tolist())
 
     def test_round1_bets_are_2(self):
         bet_sequences = [(PlayerActions.BET_RAISE, PlayerActions.CHECK_CALL),
                          (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([-3, 3], payoffs.tolist())
+        self.assertEqual([0, 6], payoffs.tolist())
 
     def test_round2_bets_are_4(self):
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
                          (PlayerActions.BET_RAISE, PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([-5, 5], payoffs.tolist())
+        self.assertEqual([0, 10], payoffs.tolist())
 
     def test_round1_bets_are_2_reraise(self):
         bet_sequences = [(PlayerActions.BET_RAISE, PlayerActions.BET_RAISE, PlayerActions.CHECK_CALL),
                          (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([-5, 5], payoffs.tolist())
+        self.assertEqual([0, 10], payoffs.tolist())
 
     def test_round2_bets_are_4_reraise(self):
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
                          (PlayerActions.BET_RAISE, PlayerActions.BET_RAISE, PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([-9, 9], payoffs.tolist())
+        self.assertEqual([0, 18], payoffs.tolist())
 
     def test_round1_bets_are_2_check_reraise(self):
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.BET_RAISE, PlayerActions.BET_RAISE, PlayerActions.CHECK_CALL),
                          (PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([-5, 5], payoffs.tolist())
+        self.assertEqual([0, 10], payoffs.tolist())
 
     def test_round2_bets_are_4_check_reraise(self):
         bet_sequences = [(PlayerActions.CHECK_CALL, PlayerActions.CHECK_CALL),
                          (PlayerActions.CHECK_CALL, PlayerActions.BET_RAISE, PlayerActions.BET_RAISE,
                                 PlayerActions.CHECK_CALL)]
         payoffs = LeducPokerGame.LeducNode(bet_sequences=bet_sequences, board_card=0).get_payoffs([1, 2])
-        self.assertEqual([-9, 9], payoffs.tolist())
+        self.assertEqual([0, 18], payoffs.tolist())

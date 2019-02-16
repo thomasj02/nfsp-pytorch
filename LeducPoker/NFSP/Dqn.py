@@ -44,7 +44,6 @@ class QNetwork(nn.Module):
         #     else:
         #         torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
         print("QNetwork:")
-        print(self)
         summary(self, (self.state_size,), device=device)
 
     def forward(self, state):
@@ -142,6 +141,7 @@ class QPolicy(object):
         # self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
         self.optimizer = optim.SGD(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
         self.epoch_num = 0
+        self.last_loss = None
 
     def eval(self):
         self.qnetwork_local.eval()
@@ -221,6 +221,8 @@ class QPolicy(object):
             loss.backward()
             self.optimizer.step()
 
+            self.last_loss = loss.float()
+
             self.epoch_num += 1
             # ------------------- update target network ------------------- #
             self._soft_update()
@@ -257,7 +259,11 @@ class LeducQPolicy(Policy):
 
     def get_action(self, infoset: LeducInfoset) -> PlayerActions:
         state = infoset_to_state(infoset)
-        valid_actions = PlayerActions.ALL_ACTIONS
+        valid_actions = [PlayerActions.CHECK_CALL]
+        if infoset.can_fold:
+            valid_actions.append(PlayerActions.FOLD)
+        if infoset.can_raise:
+            valid_actions.append(PlayerActions.BET_RAISE)
 
         q_policy_action, self.last_action_greedy = self.q_policy.act(state, valid_actions=valid_actions, greedy=False)
         return q_policy_action
