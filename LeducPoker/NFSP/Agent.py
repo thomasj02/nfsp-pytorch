@@ -22,16 +22,17 @@ class NfspAgent(Policy):
 
         self.last_state = None
         self.last_action = None
+        self.use_q_policy = None
 
     def reset(self):
         self.last_state = None
         self.last_action = None
+        self.use_q_policy = random.random() < self.nu
 
     def action_prob(self, infoset: LeducInfoset):
         state = infoset_to_state(infoset)
 
-        use_q = random.random() < self.nu
-        if use_q:
+        if self.use_q_policy:
             action = self.leduc_rl_policy.get_action(infoset)
             action = infoset.fixup_action(action)
             self.supervised_trainer.add_observation(state, action)
@@ -90,59 +91,69 @@ class CompositePolicy(Policy):
         return policy.get_action(infoset)
 
 
-def collect_trajectories(agents: List[NfspAgent], num_games: int, max_samples: Optional[int]):
-    samples_collected = 0
-    with torch.no_grad():
-        for agent in agents:
-            agent.q_policy.eval()
-            agent.supervised_trainer.network.eval()
+class TrajectoriesCollecter:
+    def __init__(self, agents: List[NfspAgent]):
+        self.game = None
+        self.agents = agents
 
-        for _ in range(num_games):
-            game = LeducPokerGame(player_cards=None)
+        self.cum_rewards = None
+        self.player_rewards = None
 
-            for agent in agents:
-                agent.reset()
+        self.reset_game()
 
-            cum_rewards = np.zeros(2, dtype=int)  # Verification
-            player_rewards = np.zeros(2, dtype=int)
+    def reset_game(self):
+        self.game = LeducPokerGame(player_cards=None)
+        for agent in self.agents:
+            agent.reset()
 
-            while not game.game_state.is_terminal:
-                player_to_act = game.game_state.player_to_act
+        self.cum_rewards = np.zeros(2, dtype=int)  # Verification
+        self.player_rewards = np.zeros(2, dtype=int)
+
+    def collect_trajectories(self, max_samples: Optional[int]):
+        samples_collected = 0
+        with torch.no_grad():
+            for agent in self.agents:
+                agent.q_policy.eval()
+                agent.supervised_trainer.network.eval()
+
+            while samples_collected < max_samples:
+                player_to_act = self.game.game_state.player_to_act
                 if player_to_act == -1:
-                    game.game_state.deal_board_card()
+                    self.game.game_state.deal_board_card()
                     continue
 
-                infoset = game.game_state.infosets[player_to_act]
+                infoset = self.game.game_state.infosets[player_to_act]
 
-                agent = agents[player_to_act]
-                agent.notify_reward(next_infoset=infoset, reward=player_rewards[player_to_act], is_terminal=False)
-                cum_rewards[player_to_act] += player_rewards[player_to_act]
+                agent = self.agents[player_to_act]
+                agent.notify_reward(
+                    next_infoset=infoset, reward=self.player_rewards[player_to_act], is_terminal=False)
+                self.cum_rewards[player_to_act] += self.player_rewards[player_to_act]
                 samples_collected += 1
-                if (max_samples is not None) and (samples_collected >= max_samples):
-                    return samples_collected
 
                 action = agent.get_action(infoset)
                 action = infoset.fixup_action(action)
 
-                action_cost = game.game_state.add_action(action)
-                player_rewards[player_to_act] = -action_cost
+                action_cost = self.game.game_state.add_action(action)
+                self.player_rewards[player_to_act] = -action_cost
 
-                if game.game_state.is_terminal:
+                if self.game.game_state.is_terminal:
                     # This is so hacky
                     if action == PlayerActions.FOLD:
                         # Return the bet
-                        if game.game_state.game_round == 0:
-                            player_rewards[(player_to_act + 1) % 2] += 2
+                        if self.game.game_state.game_round == 0:
+                            self.player_rewards[(player_to_act + 1) % 2] += 2
                         else:
-                            player_rewards[(player_to_act + 1) % 2] += 4
+                            self.player_rewards[(player_to_act + 1) % 2] += 4
 
-                    game_rewards = game.game_state.get_payoffs()
-                    game_rewards += player_rewards
-                    cum_rewards += game_rewards
-                    assert(sum(cum_rewards) == 0)
+                    game_rewards = self.game.game_state.get_payoffs()
+                    game_rewards += self.player_rewards
+                    self.cum_rewards += game_rewards
+                    assert(sum(self.cum_rewards) == 2)  # The 2 antes magically appear in lua code
 
-                    for agent, reward in zip(agents, game_rewards):
-                        agent.notify_reward(reward=reward, next_infoset=None, is_terminal=game.game_state.is_terminal)
-                    samples_collected += 1
+                    for agent, reward in zip(self.agents, game_rewards):
+                        agent.notify_reward(
+                            reward=reward, next_infoset=None, is_terminal=self.game.game_state.is_terminal)
 
-        return samples_collected
+                    self.reset_game()
+
+            return samples_collected

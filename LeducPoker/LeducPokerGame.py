@@ -98,8 +98,9 @@ class LeducNode(object):
         game_round = self.game_round
         retval = 0
         if game_round == 0:
-            if len(self.bet_sequences[0]) < 2:
-                retval = 1  # Antes
+            # Lua code doesn't charge for antes
+            # if len(self.bet_sequences[0]) < 2:
+            #     retval = 1  # Antes
 
             if len(self.bet_sequences[0]) > 0 and self.bet_sequences[0][-1] == PlayerActions.BET_RAISE:
                 retval += 2  # 2 to call
@@ -123,11 +124,14 @@ class LeducNode(object):
             assert self.board_card is None
 
         # one fixup: if they folded
+        # if action == PlayerActions.FOLD:
+        #     if game_round == 0 and len(self.bet_sequences[0]) <= 2:
+        #         retval = 1  # Ante
+        #     else:
+        #         retval = 0
+        # Lua code doesn't charge for antes
         if action == PlayerActions.FOLD:
-            if game_round == 0 and len(self.bet_sequences[0]) <= 2:
-                retval = 1  # Ante
-            else:
-                retval = 0
+            retval = 0
 
         return retval
 

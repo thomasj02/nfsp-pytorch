@@ -1,4 +1,4 @@
-from LeducPoker.NFSP.Agent import NfspAgent, collect_trajectories, CompositePolicy
+from LeducPoker.NFSP.Agent import NfspAgent, TrajectoriesCollecter, CompositePolicy
 from LeducPoker.NFSP.Dqn import QPolicy, QPolicyParameters, QNetwork
 from LeducPoker.NFSP.Supervised import SupervisedTrainer, SupervisedTrainerParameters, SupervisedNetwork
 from Device import device
@@ -172,6 +172,7 @@ if __name__ == "__main__":
     parser.add_argument('--log_strategy', help="Log strategy values in tensorboard", action="store_true")
     parser.add_argument('--log_text_only', help="Log strategy and Q only to logfile", action="store_true")
     parser.add_argument('-e', '--epochs', help="Number of epochs", type=int, default=10000)
+    parser.add_argument('-r', '--report_every', help="Epochs between reports", type=int, default=100)
     _args = parser.parse_args()
 
     import os
@@ -238,66 +239,66 @@ if __name__ == "__main__":
 
     _episodes = _args.epochs
 
+    _trajectories_collecter = TrajectoriesCollecter(_nfsp_agents)
+
     with tqdm(range(_episodes)) as t:
         for e in t:
             logger.debug("Epoch begins: %s", e)
-            collect_trajectories(_nfsp_agents, num_games=1000, max_samples=128)
+            _trajectories_collecter.collect_trajectories(max_samples=128)
 
             for _agent in _nfsp_agents:
-                _agent.q_policy.learn(1)
-                _agent.supervised_trainer.learn(1)
-            # _single_agent.q_policy.learn(2)
-            # _single_agent.supervised_trainer.learn(2)
+                _agent.q_policy.learn(2)
+                _agent.supervised_trainer.learn(2)
 
-            with torch.no_grad():
-                [agent.leduc_supervised_policy.network.eval() for agent in _nfsp_agents]
+            if e % _args.report_every == 0:
+                with torch.no_grad():
+                    [agent.leduc_supervised_policy.network.eval() for agent in _nfsp_agents]
 
-                exploitability = Exploitability.get_exploitability(_composite_supervised_policy)
-                _writer.add_scalar("exploitability/exploitability", exploitability["exploitability"], global_step=e)
-                _writer.add_scalar("exploitability/p0_value", exploitability["p0_value"], global_step=e)
-                _writer.add_scalar("exploitability/p1_value", exploitability["p1_value"], global_step=e)
+                    exploitability = Exploitability.get_exploitability(_composite_supervised_policy)
+                    _writer.add_scalar("exploitability/exploitability", exploitability["exploitability"], global_step=e)
+                    _writer.add_scalar("exploitability/p0_value", exploitability["p0_value"], global_step=e)
+                    _writer.add_scalar("exploitability/p1_value", exploitability["p1_value"], global_step=e)
 
-                if _nfsp_agents[0].supervised_trainer.last_loss is not None:
-                    _writer.add_scalar("losses/supervised/p0", _nfsp_agents[0].supervised_trainer.last_loss,
+                    if _nfsp_agents[0].supervised_trainer.last_loss is not None:
+                        _writer.add_scalar("losses/supervised/p0", _nfsp_agents[0].supervised_trainer.last_loss,
+                                           global_step=e)
+                    if _nfsp_agents[1].supervised_trainer.last_loss is not None:
+                        _writer.add_scalar("losses/supervised/p1", _nfsp_agents[1].supervised_trainer.last_loss,
                                        global_step=e)
-                if _nfsp_agents[1].supervised_trainer.last_loss is not None:
-                    _writer.add_scalar("losses/supervised/p1", _nfsp_agents[1].supervised_trainer.last_loss,
-                                   global_step=e)
 
-                if _nfsp_agents[0].q_policy.last_loss is not None:
-                    _writer.add_scalar("losses/rl/p0", _nfsp_agents[0].q_policy.last_loss,
+                    if _nfsp_agents[0].q_policy.last_loss is not None:
+                        _writer.add_scalar("losses/rl/p0", _nfsp_agents[0].q_policy.last_loss,
+                                           global_step=e)
+                    if _nfsp_agents[1].q_policy.last_loss is not None:
+                        _writer.add_scalar("losses/rl/p1", _nfsp_agents[1].q_policy.last_loss,
                                        global_step=e)
-                if _nfsp_agents[1].q_policy.last_loss is not None:
-                    _writer.add_scalar("losses/rl/p1", _nfsp_agents[1].q_policy.last_loss,
-                                   global_step=e)
 
-                _writer.add_scalar("globals/epsilon", _q_policy_parameters.epsilon, global_step=e)
-                _writer.add_scalar("globals/rl_mem_p0", len(_nfsp_agents[0].q_policy.memory), global_step=e)
-                _writer.add_scalar("globals/rl_mem_p1", len(_nfsp_agents[1].q_policy.memory), global_step=e)
-                _writer.add_scalar("globals/sl_mem_p0", len(_nfsp_agents[0].supervised_trainer.reservoir.samples),
-                                   global_step=e)
-                _writer.add_scalar("globals/sl_mem_p1", len(_nfsp_agents[1].supervised_trainer.reservoir.samples),
-                                   global_step=e)
+                    _writer.add_scalar("globals/epsilon", _q_policy_parameters.epsilon, global_step=e)
+                    _writer.add_scalar("globals/rl_mem_p0", len(_nfsp_agents[0].q_policy.memory), global_step=e)
+                    _writer.add_scalar("globals/rl_mem_p1", len(_nfsp_agents[1].q_policy.memory), global_step=e)
+                    _writer.add_scalar("globals/sl_mem_p0", len(_nfsp_agents[0].supervised_trainer.reservoir.samples),
+                                       global_step=e)
+                    _writer.add_scalar("globals/sl_mem_p1", len(_nfsp_agents[1].supervised_trainer.reservoir.samples),
+                                       global_step=e)
 
-                t.set_postfix({"exploitability": exploitability, "epsilon": _q_policy_parameters.epsilon})
+                    t.set_postfix({"exploitability": exploitability, "epsilon": _q_policy_parameters.epsilon})
 
-                logger.debug(
-                    "Epoch: %s Exploitability: %s p0_value: %s p1_value: %s epsilon: %s",
-                    e, exploitability["exploitability"], exploitability["p0_value"], exploitability["p1_value"],
-                    _q_policy_parameters.epsilon)
+                    logger.debug(
+                        "Epoch: %s Exploitability: %s p0_value: %s p1_value: %s epsilon: %s",
+                        e, exploitability["exploitability"], exploitability["p0_value"], exploitability["p1_value"],
+                        _q_policy_parameters.epsilon)
 
-                if _args.log_strategy:
-                    _strategy_logger.log_strategy(policy=_composite_supervised_policy, global_step=e)
+                    if _args.log_strategy:
+                        _strategy_logger.log_strategy(policy=_composite_supervised_policy, global_step=e)
 
-                if _args.log_q:
-                    log_qvals(
-                        _writer,
-                        _nfsp_agents[0].q_policy,
-                        infoset=None,
-                        global_step=e,
-                        text_only=_args.log_text_only)
+                    if _args.log_q:
+                        log_qvals(
+                            _writer,
+                            _nfsp_agents[0].q_policy,
+                            infoset=None,
+                            global_step=e,
+                            text_only=_args.log_text_only)
 
-            _q_policy_parameters.epsilon = _initial_episilon
             _q_policy_parameters.epsilon = _initial_episilon / (1 + 1e-2 * math.sqrt(e))
 
     _writer.close()

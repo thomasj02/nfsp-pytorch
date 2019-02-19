@@ -85,7 +85,7 @@ class SupervisedTrainer(object):
         self.reservoir = Reservoir(self.parameters.buffer_size)
         self.network = network.to(device)
 
-        #self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
+        # self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
         self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
         self.loss_fn = nn.CrossEntropyLoss()
         # self.loss_fn = nn.BCELoss()

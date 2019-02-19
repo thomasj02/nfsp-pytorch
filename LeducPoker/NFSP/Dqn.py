@@ -197,10 +197,10 @@ class QPolicy(object):
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples
             gamma (float): discount factor
         """
-        if len(self.memory) < self.parameters.batch_size:
+        if len(self.memory) < 1000:
             return
 
-        self.qnetwork_target.eval()
+        self.qnetwork_target.train()  # ???
         for _ in range(epochs):
             experiences = self.memory.sample()
             states, actions, rewards, next_states, dones = experiences
