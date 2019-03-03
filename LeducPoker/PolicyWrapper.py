@@ -31,6 +31,7 @@ def infoset_to_state_30(infoset: Optional[LeducPoker.LeducPokerGame.LeducInfoset
             for player, action in enumerate(round_actions):
                 player = player % 2
                 action_idx = action - 1
+                assert action_idx >= 0
                 actions_state[round_num][player][bets_to_call][action_idx] = 1
 
                 if action == PlayerActions.BET_RAISE:

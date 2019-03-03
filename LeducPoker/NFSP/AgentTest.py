@@ -23,6 +23,7 @@ class AgentTest(unittest.TestCase):
     def test_action_prob_q(self):
         self.sut = LeducPoker.NFSP.Agent.NfspAgent(self.mock_q_policy, self.mock_supervised_trainer, nu=1.1)
 
+        self.sut.use_q_policy = True
         self.sut.leduc_rl_policy.get_action = MagicMock(return_value=1)
         self.sut.supervised_trainer.add_observation = MagicMock()
 
@@ -31,7 +32,7 @@ class AgentTest(unittest.TestCase):
 
         retval = self.sut.action_prob(infoset)
 
-        self.assertEqual(1, retval)
+        self.assertListEqual([0, 1, 0], retval.tolist())
         self.assertEqual(infoset_state.tolist(), self.sut.last_state.tolist())
 
         self.sut.leduc_rl_policy.get_action.assert_called_with(infoset)

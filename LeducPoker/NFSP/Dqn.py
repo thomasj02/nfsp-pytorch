@@ -30,7 +30,12 @@ class QNetwork(nn.Module):
         input_size = state_size
         self.layers = []
         for layer_hidden_units in hidden_units:
-            self.layers.append(nn.Linear(input_size, layer_hidden_units))
+            layer = nn.Linear(input_size, layer_hidden_units)
+            bound = 1 / np.sqrt(input_size)
+            with torch.no_grad():
+                layer.weight.uniform_(-bound, bound)
+
+            self.layers.append(layer)
             self.layers.append(nn.ReLU())
             input_size = layer_hidden_units
 
@@ -58,25 +63,23 @@ class QNetwork(nn.Module):
 class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
 
-    def __init__(self, buffer_size, batch_size, seed):
+    def __init__(self, buffer_size, batch_size):
         """Initialize a ReplayBuffer object.
 
         Params
         ======
             buffer_size (int): maximum size of buffer
             batch_size (int): size of each training batch
-            seed (int): random seed
         """
         self.memory = deque(maxlen=buffer_size)
         self.batch_size = batch_size
         self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
-        self.seed = random.seed(seed)
 
     def add(self, state, action, reward, next_state, done):
         """Add a new experience to memory."""
         reward *= 0.0385  # Arbitrary reward scaling from Heinrich Lua code
 
-        e = self.experience(state, action, reward, next_state, done)
+        e = self.experience(state.copy(), action.copy(), reward.copy(), next_state.copy(), done)
         self.memory.append(e)
 
     def sample(self):
@@ -134,9 +137,7 @@ class QPolicy(object):
 
         self.memory = ReplayBuffer(
             buffer_size=self.parameters.buffer_size,
-            batch_size=self.parameters.batch_size,
-            seed=42
-        )
+            batch_size=self.parameters.batch_size)
 
         # self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
         self.optimizer = optim.SGD(self.qnetwork_local.parameters(), lr=parameters.learning_rate)
@@ -166,7 +167,17 @@ class QPolicy(object):
 
         return action_values
 
-    def act(self, state, valid_actions: List[int], greedy: bool):
+    def get_action_probs(self, state):
+        action_values = self._get_action_values(state)
+        valid_action_values = action_values.cpu().data.numpy()[0]
+        max_val_action = np.argmax(valid_action_values)
+
+        probs = [self.parameters.epsilon / 3] * 3
+        probs[max_val_action] += 1 - self.parameters.epsilon
+
+        return probs
+
+    def act(self, state, greedy: bool):
         """Returns actions for given state as per current policy.
 
         Params
@@ -174,20 +185,21 @@ class QPolicy(object):
             state (array_like): current state
             eps (float): epsilon, for epsilon-greedy action selection
         """
-        action_values = self._get_action_values(state)
 
         # Epsilon-greedy action selection
-        if greedy or random.random() > self.parameters.epsilon:
-            retval = None
+        if greedy:
+            action_values = self._get_action_values(state)
             valid_action_values = action_values.cpu().data.numpy()[0]
-            while retval is None:
-                retval = np.argmax(valid_action_values)
-                if retval not in valid_actions:
-                    valid_action_values[retval] = float('-inf')
-                    retval = None
-            return retval, True
+            max_val_action = np.argmax(valid_action_values)
+            retval = max_val_action
+            did_greedy = True
         else:
-            return random.choice(valid_actions), False
+            act_probs = self.get_action_probs(state)
+            retval = np.random.choice([PlayerActions.FOLD, PlayerActions.CHECK_CALL, PlayerActions.BET_RAISE], 1,
+                p=act_probs)
+            did_greedy = False
+
+        return retval, did_greedy
 
     def learn(self, epochs: int):
         """Update value parameters using given batch of experience tuples.
@@ -215,7 +227,7 @@ class QPolicy(object):
             q_local = self.qnetwork_local(states)
             q_local = q_local.gather(1, actions)
 
-            loss = F.mse_loss(q_targets, q_local)
+            loss = F.mse_loss(q_local, q_targets)
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -255,15 +267,10 @@ class LeducQPolicy(Policy):
         self.last_action_greedy = False
 
     def action_prob(self, infoset: LeducInfoset):
-        raise RuntimeError("Q Policies don't have action probs")
+        state = infoset_to_state(infoset)
+        return self.q_policy.get_action_probs(state)
 
     def get_action(self, infoset: LeducInfoset) -> PlayerActions:
         state = infoset_to_state(infoset)
-        valid_actions = [PlayerActions.CHECK_CALL]
-        if infoset.can_fold:
-            valid_actions.append(PlayerActions.FOLD)
-        if infoset.can_raise:
-            valid_actions.append(PlayerActions.BET_RAISE)
-
-        q_policy_action, self.last_action_greedy = self.q_policy.act(state, valid_actions=valid_actions, greedy=False)
+        q_policy_action, self.last_action_greedy = self.q_policy.act(state, greedy=False)
         return q_policy_action

@@ -21,7 +21,11 @@ class SupervisedNetwork(nn.Module):
         input_size = state_size
         self.layers = []
         for layer_hidden_units in hidden_units:
-            self.layers.append(nn.Linear(input_size, layer_hidden_units))
+            layer = nn.Linear(input_size, layer_hidden_units)
+            bound = 1 / np.sqrt(input_size)
+            with torch.no_grad():
+                layer.weight.uniform_(-bound, bound)
+            self.layers.append(layer)
             self.layers.append(nn.ReLU())
             input_size = layer_hidden_units
 
@@ -30,10 +34,7 @@ class SupervisedNetwork(nn.Module):
         else:
             final_units = action_size
         self.layers.append(nn.Linear(input_size, final_units))
-        # self.layers.append(nn.ReLU())
         self.layers = nn.ModuleList(self.layers)
-
-        self.softmax = nn.Softmax(dim=1)
 
         # for layer in self.layers:
         #     torch.nn.init.orthogonal_(layer[0].weight, torch.nn.init.calculate_gain('relu'))
@@ -41,8 +42,6 @@ class SupervisedNetwork(nn.Module):
         summary(self, (self.state_size,), device=device)
 
     def forward(self, state):
-        """Build a network that maps state -> action values."""
-
         for layer in self.layers:
             state = layer(state)
 
@@ -57,17 +56,9 @@ class SupervisedPolicy(Policy):
         state = infoset_to_state(infoset)
         state = torch.from_numpy(np.array(state)).float().unsqueeze(0).to(device)
         nn_retval = self.network.forward(state).cpu().detach()
-        nn_retval = self.network.softmax(nn_retval)
+        nn_retval = nn.Softmax(dim=1)(nn_retval)
+
         retval = nn_retval.cpu().detach().numpy()[0]
-
-        if not infoset.can_raise:
-            retval[PlayerActions.CHECK_CALL] += retval[PlayerActions.BET_RAISE]
-            retval[PlayerActions.BET_RAISE] = 0
-        if not infoset.can_fold:
-            retval[PlayerActions.CHECK_CALL] += retval[PlayerActions.FOLD]
-            retval[PlayerActions.FOLD] = 0
-
-        retval /= retval.sum()
 
         return retval
 
@@ -88,11 +79,10 @@ class SupervisedTrainer(object):
         # self.optimizer = optim.Adam(self.network.parameters(), lr=self.parameters.learning_rate)
         self.optimizer = optim.SGD(self.network.parameters(), lr=self.parameters.learning_rate)
         self.loss_fn = nn.CrossEntropyLoss()
-        # self.loss_fn = nn.BCELoss()
         self.last_loss = None
 
     def add_observation(self, state, action):
-        self.reservoir.add_sample((state, action))
+        self.reservoir.add_sample((state.copy(), action))
 
     def learn(self, epochs):
         if len(self.reservoir.samples) < max(self.parameters.batch_size, 1000):  # 1000 from nfsp lua code
@@ -118,5 +108,3 @@ class SupervisedTrainer(object):
             self.optimizer.step()
 
             self.last_loss = loss.float()
-
-

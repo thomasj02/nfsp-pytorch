@@ -1,6 +1,7 @@
 from typing import Tuple, Optional, List
 import random
 import numpy as np
+import copy
 
 
 class PlayerActions:
@@ -28,11 +29,21 @@ class LeducNode(object):
         self.board_card = board_card
 
         if self.game_round == 1:
-            assert self.board_card is not None
+            assert self.board_card is not None or len(self.bet_sequences[1]) == 0
 
     @property
     def game_round(self) -> int:
         return 1 if len(self.bet_sequences[0]) >= 2 and self.bet_sequences[0][-1] == PlayerActions.CHECK_CALL else 0
+
+    def can_take_action(self, action) -> bool:
+        if action == PlayerActions.CHECK_CALL:
+            return True
+        elif action == PlayerActions.FOLD:
+            return self.can_fold
+        elif action == PlayerActions.BET_RAISE:
+            return self.can_raise
+
+        raise RuntimeError("Bad action")
 
     @property
     def can_raise(self) -> bool:
@@ -92,9 +103,8 @@ class LeducNode(object):
         return len(relevant_bet_sequence) % 2
 
     # Returns cost of taking action
-    def add_action(self, action: PlayerActions) -> int:
+    def add_action(self, action: PlayerActions) -> (int, PlayerActions):
         action = self.fixup_action(action)
-
         game_round = self.game_round
         retval = 0
         if game_round == 0:
@@ -133,7 +143,8 @@ class LeducNode(object):
         if action == PlayerActions.FOLD:
             retval = 0
 
-        return retval
+        # return the action cost and the fixed-up action
+        return retval, action
 
     def _get_half_pot(self) -> float:
         half_pot = 1  # Antes
@@ -160,7 +171,7 @@ class LeducNode(object):
                 half_pot += to_call
                 to_call = 4
 
-        return half_pot
+        return float(half_pot)
 
     def _get_winner(self, player_cards: List[int]) -> Optional[int]:
         try:
@@ -202,9 +213,9 @@ class LeducNode(object):
             return np.array([half_pot, half_pot])
 
         if winner == 0:
-            return np.array([half_pot * 2, 0])
+            return np.array([half_pot * 2.0, 0.0])
         elif winner == 1:
-            return np.array([0, half_pot * 2])
+            return np.array([0.0, half_pot * 2.0])
 
 
 class LeducInfoset(LeducNode):
@@ -249,13 +260,12 @@ class LeducGameState(LeducNode):
             board_card: Optional[int]):
         self.player_cards = player_cards
         super().__init__(bet_sequences=bet_sequences, board_card=board_card)
-        self.infosets = tuple(
-            LeducInfoset(card, self._bet_sequences, board_card=board_card)
-            for card in self.player_cards)
+        self.infosets = None
+        self._update_infosets()
 
     def _update_infosets(self):
         self.infosets = tuple(
-            LeducInfoset(card=card, bet_sequences=self._bet_sequences, board_card=self.board_card) for card in
+            LeducInfoset(card=card, bet_sequences=copy.deepcopy(self._bet_sequences), board_card=self.board_card) for card in
             self.player_cards)
 
     def deal_board_card(self):
@@ -269,10 +279,13 @@ class LeducGameState(LeducNode):
     def get_payoffs(self):
         return LeducNode.get_payoffs(self, self.player_cards)
 
-    def __setattr__(self, key, value):
-        super().__setattr__(key, value)
-        if key == "bet_sequences":
+    def add_action(self, action: PlayerActions):
+        retval = super().add_action(action)
+        if self.player_to_act == -1:
+            self.deal_board_card()
+        else:
             self._update_infosets()
+        return retval
 
 
 class LeducPokerGame(object):

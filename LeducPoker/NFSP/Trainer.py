@@ -14,6 +14,7 @@ import math
 from typing import Optional
 import copy
 import sys
+from LeducPoker.HeinrichExploitability import HeinrichExploitability
 
 
 import logging
@@ -34,7 +35,7 @@ class StrategyLogger(object):
         self.total_error = 0
         self.state_cnt = 0
 
-    def log_strategy(self, policy: NnPolicyWrapper, global_step: int):
+    def log_strategy(self, policy: Policy, global_step: int):
         self.total_error = 0
         self.state_cnt = 0
         self._log_strategy(policy, None, global_step)
@@ -46,7 +47,7 @@ class StrategyLogger(object):
 
     def _log_strategy(
             self,
-            policy: NnPolicyWrapper,
+            policy: Policy,
             infoset: Optional[LeducInfoset],
             global_step: int):
         def recurse(new_action):
@@ -166,8 +167,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train NFSP')
     parser.add_argument('-t', '--tag', help="Tensorboard directory name tag", default="")
     parser.add_argument('-l', '--logdir', help="Tensorboard log directory", default="./log_dir")
-    parser.add_argument('--tau', help="Q network tau", default=0.03, type=float)
-    parser.add_argument('--gamma', help="Q network gamma", default=0.99, type=float)
+    parser.add_argument('--tau', help="Q network tau", default=0, type=float)
+    parser.add_argument('--gamma', help="Q network gamma", default=1.0, type=float)
     parser.add_argument('--log_q', help="Log q values in tensorboard", action="store_true")
     parser.add_argument('--log_strategy', help="Log strategy values in tensorboard", action="store_true")
     parser.add_argument('--log_text_only', help="Log strategy and Q only to logfile", action="store_true")
@@ -204,23 +205,26 @@ if __name__ == "__main__":
         gamma=_args.gamma,
         tau=_args.tau,
         epsilon=_initial_episilon,
-        learning_rate=0.1)
+        learning_rate=1e-1)
 
     _supervised_trainer_parameters = SupervisedTrainerParameters(
         buffer_size=2_000_000,
         batch_size=128,
-        learning_rate=0.005
+        learning_rate=5e-3
     )
 
     _nu = 0.1
-    # _single_agent = make_agent(_q_policy_parameters, _supervised_trainer_parameters, _nu)
     _nfsp_agents = [
         make_agent(_q_policy_parameters, _supervised_trainer_parameters, _nu),
         make_agent(_q_policy_parameters, _supervised_trainer_parameters, _nu)
-        # _single_agent,
-        # _single_agent
     ]
+    # _single_agent = make_agent(_q_policy_parameters, _supervised_trainer_parameters, _nu)
+    # _nfsp_agents = [
+    #     _single_agent,
+    #     _single_agent
+    # ]
     _composite_supervised_policy = CompositePolicy([agent.leduc_supervised_policy for agent in _nfsp_agents])
+    # _composite_supervised_policy = CompositePolicy([GreedyQPolicy(agent.q_policy) for agent in _nfsp_agents])
 
     [agent.leduc_supervised_policy.network.eval() for agent in _nfsp_agents]
     logger.info("P0 Init exploitability: %s", Exploitability.get_exploitability(_nfsp_agents[0].leduc_supervised_policy))
@@ -254,6 +258,10 @@ if __name__ == "__main__":
                 with torch.no_grad():
                     [agent.leduc_supervised_policy.network.eval() for agent in _nfsp_agents]
 
+                    # exploitability = HeinrichExploitability().eval_exploitability(_composite_supervised_policy)
+                    # _writer.add_scalar("exploitability/exploitability", exploitability.mean(), global_step=e)
+                    # _writer.add_scalar("exploitability/p0_value", exploitability[0], global_step=e)
+                    # _writer.add_scalar("exploitability/p1_value", exploitability[1], global_step=e)
                     exploitability = Exploitability.get_exploitability(_composite_supervised_policy)
                     _writer.add_scalar("exploitability/exploitability", exploitability["exploitability"], global_step=e)
                     _writer.add_scalar("exploitability/p0_value", exploitability["p0_value"], global_step=e)
@@ -282,11 +290,16 @@ if __name__ == "__main__":
                                        global_step=e)
 
                     t.set_postfix({"exploitability": exploitability, "epsilon": _q_policy_parameters.epsilon})
+                    # t.set_postfix({"exploitability": exploitability.mean(), "epsilon": _q_policy_parameters.epsilon})
 
                     logger.debug(
                         "Epoch: %s Exploitability: %s p0_value: %s p1_value: %s epsilon: %s",
                         e, exploitability["exploitability"], exploitability["p0_value"], exploitability["p1_value"],
                         _q_policy_parameters.epsilon)
+                    # logger.debug(
+                    #     "Epoch: %s Exploitability: %s p0_value: %s p1_value: %s epsilon: %s",
+                    #     e, exploitability.mean(), exploitability[0], exploitability[1],
+                    #     _q_policy_parameters.epsilon)
 
                     if _args.log_strategy:
                         _strategy_logger.log_strategy(policy=_composite_supervised_policy, global_step=e)
